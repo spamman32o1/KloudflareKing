@@ -1,13 +1,13 @@
-const form = document.querySelector("#tunnel-form");
-const input = document.querySelector("#target-url");
-const tunnelCountInput = document.querySelector("#tunnel-count");
-const proxyTypeInput = document.querySelector("#proxy-type");
-const proxyFileInput = document.querySelector("#proxy-file");
-const proxyListInput = document.querySelector("#proxy-list");
+const title = document.querySelector("#campaign-title");
+const subtitle = document.querySelector("#campaign-subtitle");
 const list = document.querySelector("#tunnel-list");
 const emptyState = document.querySelector("#empty-state");
 const refreshBtn = document.querySelector("#refresh-btn");
 const template = document.querySelector("#tunnel-card");
+const copyAllBtn = document.querySelector("#copy-all");
+
+const params = new URLSearchParams(window.location.search);
+const campaignName = params.get("name");
 
 const handleUnauthorized = (response) => {
   if (response.status === 401) {
@@ -22,10 +22,14 @@ const renderTunnels = (tunnels) => {
 
   if (!tunnels.length) {
     emptyState.style.display = "block";
+    subtitle.textContent = "No tunnels are currently assigned to this campaign.";
     return;
   }
 
   emptyState.style.display = "none";
+  subtitle.textContent = `${tunnels.length} active tunnel${
+    tunnels.length === 1 ? "" : "s"
+  } ready to copy or share.`;
 
   tunnels.forEach((tunnel) => {
     const node = template.content.cloneNode(true);
@@ -65,66 +69,31 @@ const fetchTunnels = async () => {
     return;
   }
   const data = await response.json();
-  renderTunnels(data.tunnels);
+  const tunnels = data.tunnels.filter(
+    (tunnel) => (tunnel.tunnelName?.trim() || "Untitled campaign") === campaignName
+  );
+  renderTunnels(tunnels);
+
+  copyAllBtn.onclick = async () => {
+    const links = tunnels.map((tunnel) => `https://${tunnel.hostname}`);
+    if (!links.length) {
+      return;
+    }
+    await navigator.clipboard.writeText(links.join("\n"));
+    copyAllBtn.textContent = "Copied!";
+    copyAllBtn.classList.add("copied");
+    setTimeout(() => {
+      copyAllBtn.textContent = "Copy all links";
+      copyAllBtn.classList.remove("copied");
+    }, 1500);
+  };
 };
 
-const parseProxyList = (value) =>
-  value
-    .split(/\r?\n/)
-    .map((proxy) => proxy.trim())
-    .filter(Boolean);
-
-proxyFileInput.addEventListener("change", () => {
-  const file = proxyFileInput.files?.[0];
-  if (!file) {
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    const text = typeof reader.result === "string" ? reader.result : "";
-    proxyListInput.value = text.trim();
-  };
-  reader.readAsText(file);
-});
-
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  const targetUrl = input.value.trim();
-  if (!targetUrl) {
-    return;
-  }
-  const tunnelCount = Number.parseInt(tunnelCountInput.value, 10);
-  const proxies = parseProxyList(proxyListInput.value);
-  const proxyType = proxyTypeInput.value;
-
-  const response = await fetch("/api/tunnels", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      targetUrl,
-      tunnelCount,
-      proxies,
-      proxyType
-    })
-  });
-
-  if (handleUnauthorized(response)) {
-    return;
-  }
-
-  if (response.ok) {
-    input.value = "";
-    tunnelCountInput.value = "1";
-    proxyTypeInput.value = "";
-    proxyFileInput.value = "";
-    proxyListInput.value = "";
-    await fetchTunnels();
-  }
-});
+if (!campaignName) {
+  window.location.href = "/index.html";
+} else {
+  title.textContent = campaignName;
+  fetchTunnels();
+}
 
 refreshBtn.addEventListener("click", fetchTunnels);
-
-fetchTunnels();

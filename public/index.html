@@ -11,99 +11,61 @@
       <header>
         <div>
           <p class="eyebrow">Cloudflare Tunnel Manager</p>
-          <h1>Launch free tunnels in seconds.</h1>
+          <h1>Manage every tunnel campaign in one workspace.</h1>
           <p class="subtitle">
-            Enter a local or public URL and generate a free Cloudflare Tunnel
-            endpoint automatically.
+            Group tunnels by campaign name, jump into individual tunnel
+            dashboards, and copy bulk links in a single click.
           </p>
+          <div class="header-actions">
+            <a class="primary-btn" href="/create.html">Create new tunnel</a>
+          </div>
         </div>
         <div class="status-card">
           <h2>System status</h2>
           <p>Provisioning uses the free Cloudflare Tunnel flow.</p>
           <ul>
             <li>Instant hostname allocation</li>
-            <li>Visible active tunnel list</li>
-            <li>Simple copy for shareable URLs</li>
+            <li>Campaign-level tunnel grouping</li>
+            <li>Bulk copy for shareable URLs</li>
           </ul>
         </div>
       </header>
 
       <main>
-        <section class="form-panel">
-          <h2>Create a new tunnel</h2>
-          <form id="tunnel-form">
-            <label for="target-url">Target URL</label>
-            <input
-              id="target-url"
-              name="target-url"
-              type="url"
-              placeholder="https://your-local-app.example"
-              required
-            />
-            <label for="tunnel-count">Tunnel amount</label>
-            <input
-              id="tunnel-count"
-              name="tunnel-count"
-              type="number"
-              min="1"
-              max="100"
-              value="1"
-              required
-            />
-            <label for="proxy-type">Proxy type</label>
-            <select id="proxy-type" name="proxy-type">
-              <option value="">No proxy</option>
-              <option value="http">HTTP</option>
-              <option value="https">HTTPS</option>
-              <option value="socks5">SOCKS5</option>
-            </select>
-            <label for="proxy-file">Proxy list file</label>
-            <input id="proxy-file" name="proxy-file" type="file" accept=".txt" />
-            <label for="proxy-list">Proxy list</label>
-            <textarea
-              id="proxy-list"
-              name="proxy-list"
-              rows="4"
-              placeholder="ip:port or ip:port:user:pass (one per line)"
-            ></textarea>
-            <button type="submit">Create free tunnel</button>
-            <p class="helper">
-              We will return free Cloudflare hostnames and spread tunnels evenly
-              across your proxies.
-            </p>
-          </form>
-        </section>
-
-        <section class="list-panel">
+        <section class="list-panel full-panel">
           <div class="list-header">
-            <h2>Active tunnels</h2>
+            <div>
+              <h2>Tunnel campaigns</h2>
+              <p class="muted">
+                Select a campaign to view tunnel details, status, and copying
+                tools.
+              </p>
+            </div>
             <button id="refresh-btn" type="button">Refresh</button>
           </div>
           <div id="empty-state" class="empty-state">
-            No tunnels yet. Create your first tunnel to see it here.
+            No tunnel campaigns yet. Create your first tunnel to see it here.
           </div>
-          <div id="tunnel-list" class="tunnel-list"></div>
+          <div id="campaign-list" class="campaign-list"></div>
         </section>
       </main>
     </div>
 
-    <template id="tunnel-card">
-      <article class="tunnel-card">
-        <div class="card-main">
-          <div>
-            <p class="card-label">Tunnel Hostname</p>
-            <p class="card-value" data-hostname></p>
-          </div>
-          <button class="copy-btn" type="button">Copy URL</button>
+    <template id="campaign-card">
+      <article class="campaign-card">
+        <div>
+          <p class="card-label">Campaign name</p>
+          <p class="card-title" data-name></p>
+          <p class="card-meta" data-count></p>
+          <p class="card-meta" data-latest></p>
         </div>
-        <div class="card-meta">
-          <span data-target></span>
-          <span data-proxy></span>
-          <span data-created></span>
+        <div class="card-actions">
+          <a class="secondary-btn" data-link>View tunnels</a>
+          <button class="copy-btn" type="button">Copy all links</button>
         </div>
       </article>
     </template>
 
-    <script src="app.js"></script>
+    <script src="dashboard.js"></script>
   </body>
 </html>

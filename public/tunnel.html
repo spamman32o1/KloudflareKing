@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tunnel campaign</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div>
+          <p class="eyebrow">Cloudflare Tunnel Manager</p>
+          <h1 id="campaign-title">Tunnel campaign</h1>
+          <p class="subtitle" id="campaign-subtitle"></p>
+          <div class="header-actions">
+            <a class="secondary-btn" href="/index.html">Back to dashboard</a>
+          </div>
+        </div>
+        <div class="status-card">
+          <h2>Campaign actions</h2>
+          <p>Share or manage this tunnel group in seconds.</p>
+          <button id="copy-all" class="primary-btn" type="button">
+            Copy all links
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="list-panel full-panel">
+          <div class="list-header">
+            <div>
+              <h2>Active tunnels</h2>
+              <p class="muted">Copy individual URLs or review metadata.</p>
+            </div>
+            <button id="refresh-btn" type="button">Refresh</button>
+          </div>
+          <div id="empty-state" class="empty-state">
+            No tunnels yet for this campaign.
+          </div>
+          <div id="tunnel-list" class="tunnel-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="tunnel-card">
+      <article class="tunnel-card">
+        <div class="card-main">
+          <div>
+            <p class="card-label">Tunnel Hostname</p>
+            <p class="card-value" data-hostname></p>
+          </div>
+          <button class="copy-btn" type="button">Copy URL</button>
+        </div>
+        <div class="card-meta">
+          <span data-target></span>
+          <span data-proxy></span>
+          <span data-created></span>
+        </div>
+      </article>
+    </template>
+
+    <script src="tunnel.js"></script>
+  </body>
+</html>
