@@ -192,6 +192,90 @@ button:hover {
   font-size: 0.85rem;
 }
 
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.account-panel {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  background: #fdfdff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-list {
+  display: grid;
+  gap: 12px;
+}
+
+.account-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #ffffff;
+}
+
+.account-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-pill {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: #eef3ff;
+  color: var(--primary);
+}
+
+.status-pill.connected {
+  background: #e7f9ef;
+  color: var(--success);
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.account-actions a,
+.account-actions button {
+  font-size: 0.8rem;
+  padding: 8px 12px;
+}
+
+.domain-list {
+  margin-top: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .list-header {
   display: flex;
   align-items: center;
@@ -310,5 +394,10 @@ button:hover {
 
   .card-actions {
     width: 100%;
+  }
+
+  .account-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

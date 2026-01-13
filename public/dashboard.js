@@ -56,12 +56,17 @@ const renderCampaigns = (tunnels) => {
     const node = template.content.cloneNode(true);
     const name = node.querySelector("[data-name]");
     const count = node.querySelector("[data-count]");
+    const types = node.querySelector("[data-types]");
     const latest = node.querySelector("[data-latest]");
     const link = node.querySelector("[data-link]");
     const copyBtn = node.querySelector(".copy-btn");
 
     name.textContent = campaign.name;
     count.textContent = `${campaign.count} tunnel${campaign.count === 1 ? "" : "s"}`;
+    const uniqueTypes = Array.from(
+      new Set(campaign.tunnels.map((tunnel) => tunnel.tunnelType || "free"))
+    );
+    types.textContent = `Tunnel types: ${uniqueTypes.join(", ")}`;
     latest.textContent = campaign.latestCreatedAt
       ? `Latest tunnel created: ${formatRelativeTime(campaign.latestCreatedAt)}`
       : "No tunnels created yet.";
