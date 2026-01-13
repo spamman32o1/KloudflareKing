@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { startQuickTunnel } = require("./src/tunnels/cloudflared");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -13,9 +14,13 @@ const loginConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
 const sessions = new Map();
 
+const createTunnelId = () =>
+  `tnl_${Math.random().toString(36).slice(2, 10)}`;
+
 const createTunnel = (
   targetUrl,
   {
+    id,
     proxy,
     proxyType,
     tunnelName,
@@ -24,17 +29,20 @@ const createTunnel = (
     accountLabel,
     domainName,
     fullDomain,
-    proxyRotation
+    proxyRotation,
+    hostname,
+    processId
   } = {}
 ) => {
-  const id = `tnl_${Math.random().toString(36).slice(2, 10)}`;
-  const hostname =
-    tunnelType === "named" && fullDomain
+  const tunnelId = id || createTunnelId();
+  const assignedHostname =
+    hostname ||
+    (tunnelType === "named" && fullDomain
       ? fullDomain
-      : `free-${id}.trycloudflare.com`;
+      : `free-${tunnelId}.trycloudflare.com`);
 
   return {
-    id,
+    id: tunnelId,
     targetUrl,
     tunnelName: tunnelName || "Untitled campaign",
     tunnelType,
@@ -45,7 +53,8 @@ const createTunnel = (
     proxy: proxy || null,
     proxyType: proxyType || null,
     proxyRotation: proxyRotation || null,
-    hostname,
+    hostname: assignedHostname,
+    processId: processId ?? null,
     status: "active",
     createdAt: new Date().toISOString()
   };
@@ -221,7 +230,7 @@ app.get("/api/tunnels", (req, res) => {
   res.json({ tunnels });
 });
 
-app.post("/api/tunnels", (req, res) => {
+app.post("/api/tunnels", async (req, res) => {
   const {
     targetUrl,
     proxies,
@@ -325,24 +334,48 @@ app.post("/api/tunnels", (req, res) => {
       : null;
 
   const total = selectedType === "named" ? 1 : parsedCount;
-  for (let i = 0; i < total; i += 1) {
-    const assignedProxy =
-      selectedType === "free" && proxyList.length
-        ? proxyList[i % proxyList.length]
-        : null;
-    const tunnel = createTunnel(trimmedTarget, {
-      proxy: selectedType === "named" ? normalizedPrimaryProxy || null : assignedProxy,
-      proxyType: normalizedProxyType,
-      tunnelName: trimmedName,
-      tunnelType: selectedType,
-      accountId: account?.id ?? null,
-      accountLabel: account?.label ?? null,
-      domainName: normalizedDomain,
-      fullDomain,
-      proxyRotation: namedProxyRotation
+  try {
+    for (let i = 0; i < total; i += 1) {
+      const assignedProxy =
+        selectedType === "free" && proxyList.length
+          ? proxyList[i % proxyList.length]
+          : null;
+      const tunnelId = createTunnelId();
+      let hostname = null;
+      let processId = null;
+
+      if (selectedType === "free") {
+        const cloudflared = await startQuickTunnel({
+          id: tunnelId,
+          targetUrl: trimmedTarget,
+          noAutoupdate: true
+        });
+        hostname = cloudflared.hostname;
+        processId = cloudflared.pid;
+      }
+
+      const tunnel = createTunnel(trimmedTarget, {
+        id: tunnelId,
+        proxy: selectedType === "named" ? normalizedPrimaryProxy || null : assignedProxy,
+        proxyType: normalizedProxyType,
+        tunnelName: trimmedName,
+        tunnelType: selectedType,
+        accountId: account?.id ?? null,
+        accountLabel: account?.label ?? null,
+        domainName: normalizedDomain,
+        fullDomain,
+        proxyRotation: namedProxyRotation,
+        hostname,
+        processId
+      });
+      tunnels.unshift(tunnel);
+      created.push(tunnel);
+    }
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to start cloudflared tunnel.",
+      details: error.message
     });
-    tunnels.unshift(tunnel);
-    created.push(tunnel);
   }
 
   res.status(201).json({ tunnels: created });
