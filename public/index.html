@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloudflare Free Tunnel Manager</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div>
+          <p class="eyebrow">Cloudflare Tunnel Manager</p>
+          <h1>Launch free tunnels in seconds.</h1>
+          <p class="subtitle">
+            Enter a local or public URL and generate a free Cloudflare Tunnel
+            endpoint automatically.
+          </p>
+        </div>
+        <div class="status-card">
+          <h2>System status</h2>
+          <p>Provisioning uses the free Cloudflare Tunnel flow.</p>
+          <ul>
+            <li>Instant hostname allocation</li>
+            <li>Visible active tunnel list</li>
+            <li>Simple copy for shareable URLs</li>
+          </ul>
+        </div>
+      </header>
+
+      <main>
+        <section class="form-panel">
+          <h2>Create a new tunnel</h2>
+          <form id="tunnel-form">
+            <label for="target-url">Target URL</label>
+            <input
+              id="target-url"
+              name="target-url"
+              type="url"
+              placeholder="https://your-local-app.example"
+              required
+            />
+            <button type="submit">Create free tunnel</button>
+            <p class="helper">We will return a free Cloudflare hostname.</p>
+          </form>
+        </section>
+
+        <section class="list-panel">
+          <div class="list-header">
+            <h2>Active tunnels</h2>
+            <button id="refresh-btn" type="button">Refresh</button>
+          </div>
+          <div id="empty-state" class="empty-state">
+            No tunnels yet. Create your first tunnel to see it here.
+          </div>
+          <div id="tunnel-list" class="tunnel-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="tunnel-card">
+      <article class="tunnel-card">
+        <div class="card-main">
+          <div>
+            <p class="card-label">Tunnel Hostname</p>
+            <p class="card-value" data-hostname></p>
+          </div>
+          <button class="copy-btn" type="button">Copy URL</button>
+        </div>
+        <div class="card-meta">
+          <span data-target></span>
+          <span data-created></span>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
