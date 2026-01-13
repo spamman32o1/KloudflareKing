@@ -34,18 +34,35 @@ const renderTunnels = (tunnels) => {
   tunnels.forEach((tunnel) => {
     const node = template.content.cloneNode(true);
     const hostname = node.querySelector("[data-hostname]");
+    const type = node.querySelector("[data-type]");
+    const domain = node.querySelector("[data-domain]");
+    const account = node.querySelector("[data-account]");
     const target = node.querySelector("[data-target]");
     const proxy = node.querySelector("[data-proxy]");
+    const proxyRotation = node.querySelector("[data-proxy-rotation]");
     const created = node.querySelector("[data-created]");
     const copyBtn = node.querySelector(".copy-btn");
 
     hostname.textContent = `https://${tunnel.hostname}`;
+    type.textContent = `Type: ${tunnel.tunnelType === "named" ? "named" : "free"}`;
+    if (tunnel.tunnelType === "named" && tunnel.fullDomain) {
+      domain.textContent = `Domain: ${tunnel.fullDomain}`;
+      account.textContent = `Account: ${tunnel.accountLabel || "Unknown"}`;
+    } else {
+      domain.textContent = "Domain: trycloudflare.com";
+      account.textContent = "Account: none";
+    }
     target.textContent = `Target: ${tunnel.targetUrl}`;
     if (tunnel.proxy) {
       const proxyTypeLabel = tunnel.proxyType ? `${tunnel.proxyType.toUpperCase()} ` : "";
       proxy.textContent = `Proxy: ${proxyTypeLabel}${tunnel.proxy}`;
     } else {
       proxy.textContent = "Proxy: none";
+    }
+    if (tunnel.proxyRotation) {
+      proxyRotation.textContent = `Proxy rotation: ${tunnel.proxyRotation.strategy} after ${tunnel.proxyRotation.failureThreshold} failures`;
+    } else {
+      proxyRotation.textContent = "Proxy rotation: standard";
     }
     created.textContent = `Created: ${new Date(tunnel.createdAt).toLocaleString()}`;
 

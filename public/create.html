@@ -14,7 +14,8 @@
           <h1>Create a new tunnel campaign.</h1>
           <p class="subtitle">
             Add a campaign name so your tunnels stay organized and easy to
-            manage. You can create one or many tunnels in a single request.
+            manage. Choose free or named tunnels based on how you want to
+            publish your hostname.
           </p>
           <div class="header-actions">
             <a class="secondary-btn" href="/index.html">Back to dashboard</a>
@@ -34,6 +35,11 @@
         <section class="form-panel full-panel">
           <h2>New tunnel details</h2>
           <form id="tunnel-form">
+            <label for="tunnel-type">Tunnel type</label>
+            <select id="tunnel-type" name="tunnel-type">
+              <option value="free" selected>Free (trycloudflare.com)</option>
+              <option value="named">Named (your domain)</option>
+            </select>
             <label for="tunnel-name">Tunnel campaign name</label>
             <input
               id="tunnel-name"
@@ -50,38 +56,155 @@
               placeholder="https://your-local-app.example"
               required
             />
-            <label for="tunnel-count">Tunnel amount</label>
-            <input
-              id="tunnel-count"
-              name="tunnel-count"
-              type="number"
-              min="1"
-              max="100"
-              value="1"
-              required
-            />
-            <label for="proxy-type">Proxy type</label>
-            <select id="proxy-type" name="proxy-type">
-              <option value="">No proxy</option>
-              <option value="http">HTTP</option>
-              <option value="https">HTTPS</option>
-              <option value="socks5">SOCKS5</option>
-            </select>
-            <label for="proxy-file">Proxy list file</label>
-            <input id="proxy-file" name="proxy-file" type="file" accept=".txt" />
-            <label for="proxy-list">Proxy list</label>
-            <textarea
-              id="proxy-list"
-              name="proxy-list"
-              rows="4"
-              placeholder="ip:port or ip:port:user:pass (one per line)"
-            ></textarea>
-            <button type="submit">Create free tunnel</button>
-            <p class="helper">
+            <div class="field-group" data-mode="free">
+              <label for="tunnel-count">Tunnel amount</label>
+              <input
+                id="tunnel-count"
+                name="tunnel-count"
+                type="number"
+                min="1"
+                max="100"
+                value="1"
+                required
+              />
+              <label for="proxy-type">Proxy type</label>
+              <select id="proxy-type" name="proxy-type">
+                <option value="">No proxy</option>
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="socks5">SOCKS5</option>
+              </select>
+              <label for="proxy-file">Proxy list file</label>
+              <input id="proxy-file" name="proxy-file" type="file" accept=".txt" />
+              <label for="proxy-list">Proxy list</label>
+              <textarea
+                id="proxy-list"
+                name="proxy-list"
+                rows="4"
+                placeholder="ip:port or ip:port:user:pass (one per line)"
+              ></textarea>
+            </div>
+            <div class="field-group" data-mode="named">
+              <label for="account-select">Cloudflare account</label>
+              <select id="account-select" name="account-select" required>
+                <option value="">Select a connected account</option>
+              </select>
+              <label for="domain-select">Domain</label>
+              <select id="domain-select" name="domain-select" required>
+                <option value="">Select a domain</option>
+              </select>
+              <label for="subdomain">Subdomain (optional)</label>
+              <input
+                id="subdomain"
+                name="subdomain"
+                type="text"
+                placeholder="app"
+              />
+              <label for="named-proxy-type">Proxy type</label>
+              <select id="named-proxy-type" name="named-proxy-type">
+                <option value="">No proxy</option>
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="socks5">SOCKS5</option>
+              </select>
+              <label for="named-proxy">Primary proxy</label>
+              <input
+                id="named-proxy"
+                name="named-proxy"
+                type="text"
+                placeholder="ip:port or ip:port:user:pass"
+              />
+              <label for="named-proxy-file">Fallback proxy list file</label>
+              <input
+                id="named-proxy-file"
+                name="named-proxy-file"
+                type="file"
+                accept=".txt"
+              />
+              <label for="named-proxy-list">Fallback proxy list</label>
+              <textarea
+                id="named-proxy-list"
+                name="named-proxy-list"
+                rows="4"
+                placeholder="ip:port or ip:port:user:pass (one per line)"
+              ></textarea>
+            </div>
+            <button id="submit-btn" type="submit">Create free tunnels</button>
+            <p class="helper" id="form-helper">
               We will return free Cloudflare hostnames and spread tunnels evenly
               across your proxies.
             </p>
           </form>
+        </section>
+        <section class="form-panel">
+          <h2>Cloudflare accounts & domains</h2>
+          <p class="muted">
+            Named tunnels require an authenticated Cloudflare account and a
+            verified domain. Follow the
+            <a
+              href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/"
+              target="_blank"
+              rel="noreferrer"
+              >official tunnel setup docs</a
+            >
+            when preparing new accounts.
+          </p>
+          <div class="stack">
+            <form id="account-form">
+              <h3>Add a Cloudflare account</h3>
+              <label for="account-label">Account label</label>
+              <input
+                id="account-label"
+                name="account-label"
+                type="text"
+                placeholder="Marketing account"
+                required
+              />
+              <label for="account-email">Account email</label>
+              <input
+                id="account-email"
+                name="account-email"
+                type="email"
+                placeholder="owner@example.com"
+                required
+              />
+              <label for="account-id">Cloudflare account ID</label>
+              <input
+                id="account-id"
+                name="account-id"
+                type="text"
+                placeholder="a1b2c3d4"
+                required
+              />
+              <button type="submit">Add account</button>
+            </form>
+            <div class="account-panel">
+              <div class="list-header">
+                <div>
+                  <h3>Connected accounts</h3>
+                  <p class="muted">Open the login URL to connect each account.</p>
+                </div>
+                <button id="refresh-accounts" type="button">Refresh</button>
+              </div>
+              <div id="account-list" class="account-list"></div>
+            </div>
+            <form id="domain-form">
+              <h3>Add a domain to the selected account</h3>
+              <label for="domain-input">Domain name</label>
+              <input
+                id="domain-input"
+                name="domain-input"
+                type="text"
+                placeholder="example.com"
+                required
+              />
+              <button type="submit">Add domain</button>
+              <p class="helper">
+                Domains listed here populate the named tunnel domain selector.
+              </p>
+              <div id="domain-list" class="domain-list"></div>
+            </form>
+          </div>
         </section>
       </main>
     </div>
