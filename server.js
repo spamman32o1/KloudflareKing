@@ -1,7 +1,10 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const net = require("net");
 const crypto = require("crypto");
+const { execFile, spawn } = require("child_process");
+const multer = require("multer");
 const { startQuickTunnel, stopTunnel } = require("./src/tunnels/cloudflared");
 const { logError } = require("./src/utils/logger");
 const {
@@ -27,6 +30,22 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+
+const uploadRoot = path.join(__dirname, "uploads");
+const deploymentRoot = path.join(__dirname, "deployments");
+fs.mkdirSync(uploadRoot, { recursive: true });
+fs.mkdirSync(deploymentRoot, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: uploadRoot,
+    filename: (req, file, cb) => {
+      const safeName = file.originalname.replace(/[^\w.-]/g, "_");
+      cb(null, `${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${safeName}`);
+    }
+  }),
+  limits: { fileSize: 200 * 1024 * 1024 }
+});
 
 const configPath = path.join(__dirname, "config.json");
 const loginConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
@@ -67,7 +86,8 @@ const createTunnel = (
     fullDomain,
     proxyRotation,
     hostname,
-    processId
+    processId,
+    deploymentId
   } = {}
 ) => {
   const tunnelId = id || createTunnelId();
@@ -91,6 +111,7 @@ const createTunnel = (
     proxyRotation: proxyRotation || null,
     hostname: assignedHostname,
     processId: processId ?? null,
+    deploymentId: deploymentId ?? null,
     status: "active",
     createdAt: new Date().toISOString()
   };
@@ -207,6 +228,120 @@ const requireAdmin = (req, res, next) => {
 };
 
 const allowedRoles = new Set(["admin", "user"]);
+const deployments = new Map();
+
+const runCommand = (command, args, options = {}) =>
+  new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        const commandError = new Error(stderr || error.message);
+        commandError.stdout = stdout;
+        commandError.stderr = stderr;
+        return reject(commandError);
+      }
+      return resolve({ stdout, stderr });
+    });
+  });
+
+const getAvailablePort = () =>
+  new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, () => {
+      const { port: assigned } = server.address();
+      server.close(() => resolve(assigned));
+    });
+    server.on("error", reject);
+  });
+
+const resolveAppRoot = (rootDir) => {
+  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+  const folders = entries.filter((entry) => entry.isDirectory());
+  const files = entries.filter((entry) => entry.isFile());
+  if (files.length === 0 && folders.length === 1) {
+    return path.join(rootDir, folders[0].name);
+  }
+  return rootDir;
+};
+
+const findStartupFile = (rootDir) => {
+  const candidates = ["server.js", "app.js", "index.js", path.join("src", "index.js")];
+  const match = candidates.find((candidate) =>
+    fs.existsSync(path.join(rootDir, candidate))
+  );
+  return match || null;
+};
+
+const startDeployment = async ({ rootDir, startupScript }) => {
+  const appRoot = resolveAppRoot(rootDir);
+  const hasPackageLock = fs.existsSync(path.join(appRoot, "package-lock.json"));
+  const port = await getAvailablePort();
+  const env = {
+    ...process.env,
+    PORT: String(port),
+    HOST: "0.0.0.0"
+  };
+
+  let child;
+  let commandLabel;
+  let type;
+
+  if (hasPackageLock) {
+    if (startupScript) {
+      child = spawn(startupScript, {
+        cwd: appRoot,
+        env,
+        shell: true,
+        stdio: "ignore"
+      });
+      commandLabel = startupScript;
+      type = "script";
+    } else {
+      const startupFile = findStartupFile(appRoot);
+      if (!startupFile) {
+        throw new Error(
+          "Unable to detect a startup file. Provide a startup script."
+        );
+      }
+      child = spawn("node", [startupFile], {
+        cwd: appRoot,
+        env,
+        stdio: "ignore"
+      });
+      commandLabel = `node ${startupFile}`;
+      type = "node";
+    }
+  } else {
+    child = spawn("php", ["-S", `0.0.0.0:${port}`, "-t", appRoot], {
+      cwd: appRoot,
+      env,
+      stdio: "ignore"
+    });
+    commandLabel = "php -S";
+    type = "php";
+  }
+
+  child.unref();
+
+  return {
+    rootDir: appRoot,
+    port,
+    process: child,
+    targetUrl: `http://localhost:${port}`,
+    command: commandLabel,
+    type
+  };
+};
+
+const stopDeployment = (deploymentId) => {
+  const deployment = deployments.get(deploymentId);
+  if (!deployment) {
+    return;
+  }
+  if (deployment.process && !deployment.process.killed) {
+    deployment.process.kill();
+  }
+  deployments.delete(deploymentId);
+};
 
 app.get("/api/users", requireAdmin, (req, res) => {
   const users = listUsers().map(sanitizeUser);
@@ -431,6 +566,56 @@ app.post("/api/cloudflare/accounts/:id/domains", async (req, res) => {
   }
 });
 
+app.post("/api/deployments", upload.array("files"), async (req, res) => {
+  const uploaded = req.files || [];
+  if (!uploaded.length) {
+    return res.status(400).json({ error: "Upload a zip or project files to deploy." });
+  }
+
+  const startupScript =
+    typeof req.body.startupScript === "string" ? req.body.startupScript.trim() : "";
+  const deploymentId = `app_${crypto.randomBytes(6).toString("hex")}`;
+  const deploymentDir = path.join(deploymentRoot, deploymentId);
+  fs.mkdirSync(deploymentDir, { recursive: true });
+
+  try {
+    if (
+      uploaded.length === 1 &&
+      path.extname(uploaded[0].originalname).toLowerCase() === ".zip"
+    ) {
+      await runCommand("unzip", ["-o", uploaded[0].path, "-d", deploymentDir]);
+      fs.unlinkSync(uploaded[0].path);
+    } else {
+      uploaded.forEach((file) => {
+        const target = path.join(deploymentDir, file.originalname);
+        fs.renameSync(file.path, target);
+      });
+    }
+
+    const deployment = await startDeployment({
+      rootDir: deploymentDir,
+      startupScript: startupScript || null
+    });
+    deployments.set(deploymentId, {
+      ...deployment,
+      id: deploymentId
+    });
+
+    return res.status(201).json({
+      deploymentId,
+      targetUrl: deployment.targetUrl,
+      port: deployment.port,
+      type: deployment.type
+    });
+  } catch (error) {
+    logError(error, "POST /api/deployments");
+    return res.status(500).json({
+      error: "Failed to start the deployment.",
+      details: error.message
+    });
+  }
+});
+
 app.get("/api/tunnels", (req, res) => {
   res.json({ tunnels });
 });
@@ -438,6 +623,7 @@ app.get("/api/tunnels", (req, res) => {
 app.post("/api/tunnels", async (req, res) => {
   const {
     targetUrl,
+    deploymentId,
     proxies,
     proxyType,
     tunnelCount,
@@ -450,8 +636,16 @@ app.post("/api/tunnels", async (req, res) => {
     fallbackProxies
   } = req.body;
 
-  if (!targetUrl || typeof targetUrl !== "string") {
-    return res.status(400).json({ error: "A valid target URL is required." });
+  const trimmedTarget =
+    typeof targetUrl === "string" ? targetUrl.trim() : "";
+  const resolvedTargetUrl =
+    trimmedTarget ||
+    (deploymentId && deployments.get(deploymentId)?.targetUrl) ||
+    "";
+  if (!resolvedTargetUrl) {
+    return res.status(400).json({
+      error: "Provide a target URL or deploy an app before creating tunnels."
+    });
   }
 
   if (!tunnelName || typeof tunnelName !== "string" || !tunnelName.trim()) {
@@ -477,7 +671,6 @@ app.post("/api/tunnels", async (req, res) => {
     typeof proxyType === "string" && proxyType.trim().length
       ? proxyType.trim()
       : null;
-  const trimmedTarget = targetUrl.trim();
   const trimmedName = tunnelName.trim();
   const created = [];
   let account = null;
@@ -569,7 +762,7 @@ app.post("/api/tunnels", async (req, res) => {
       if (selectedType === "free") {
         const cloudflared = await startQuickTunnel({
           id: tunnelId,
-          targetUrl: trimmedTarget,
+          targetUrl: resolvedTargetUrl,
           noAutoupdate: true
         });
         hostname = cloudflared.hostname;
@@ -596,7 +789,7 @@ app.post("/api/tunnels", async (req, res) => {
         hostname = fullDomain;
       }
 
-      const tunnel = createTunnel(trimmedTarget, {
+      const tunnel = createTunnel(resolvedTargetUrl, {
         id: tunnelId,
         proxy: selectedType === "named" ? normalizedPrimaryProxy || null : assignedProxy,
         proxyType: normalizedProxyType,
@@ -608,7 +801,8 @@ app.post("/api/tunnels", async (req, res) => {
         fullDomain,
         proxyRotation: namedProxyRotation,
         hostname,
-        processId
+        processId,
+        deploymentId: deploymentId || null
       });
       tunnels.unshift(tunnel);
       created.push(tunnel);
@@ -633,6 +827,9 @@ app.delete("/api/tunnels/:id", (req, res) => {
   if (removed.tunnelType === "free") {
     stopTunnel(removed.id);
   }
+  if (removed.deploymentId) {
+    stopDeployment(removed.deploymentId);
+  }
   return res.json({ deleted: 1 });
 });
 
@@ -645,11 +842,15 @@ app.delete("/api/campaigns/:name", (req, res) => {
   if (!matching.length) {
     return res.status(404).json({ error: "Campaign not found." });
   }
+  const deploymentIds = new Set(
+    matching.map((tunnel) => tunnel.deploymentId).filter(Boolean)
+  );
   matching.forEach((tunnel) => {
     if (tunnel.tunnelType === "free") {
       stopTunnel(tunnel.id);
     }
   });
+  deploymentIds.forEach((deploymentId) => stopDeployment(deploymentId));
   const remaining = tunnels.filter(
     (tunnel) =>
       (tunnel.tunnelName?.trim() || "Untitled campaign") !== decodedName

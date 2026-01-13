@@ -2,6 +2,11 @@ const form = document.querySelector("#tunnel-form");
 const tunnelTypeSelect = document.querySelector("#tunnel-type");
 const nameInput = document.querySelector("#tunnel-name");
 const targetInput = document.querySelector("#target-url");
+const targetSourceInputs = document.querySelectorAll('input[name="target-source"]');
+const targetUrlSection = document.querySelector('[data-target="url"]');
+const targetDeploySection = document.querySelector('[data-target="deploy"]');
+const deployFilesInput = document.querySelector("#deploy-files");
+const startupScriptInput = document.querySelector("#startup-script");
 const tunnelCountInput = document.querySelector("#tunnel-count");
 const proxyTypeInput = document.querySelector("#proxy-type");
 const proxyFileInput = document.querySelector("#proxy-file");
@@ -52,6 +57,17 @@ const setFieldVisibility = (mode) => {
     ? "Named tunnels use your Cloudflare API token to create the tunnel and DNS record."
     : "We will return free Cloudflare hostnames and spread tunnels evenly across your proxies.";
 };
+
+const setTargetVisibility = (mode) => {
+  const isDeploy = mode === "deploy";
+  targetDeploySection.style.display = isDeploy ? "flex" : "none";
+  targetUrlSection.style.display = isDeploy ? "none" : "flex";
+  targetInput.required = !isDeploy;
+  deployFilesInput.required = isDeploy;
+};
+
+const getTargetMode = () =>
+  document.querySelector('input[name="target-source"]:checked')?.value || "url";
 
 const fetchAccounts = async () => {
   const response = await fetch("/api/cloudflare/accounts");
@@ -213,6 +229,12 @@ tunnelTypeSelect.addEventListener("change", () => {
   setFieldVisibility(tunnelTypeSelect.value);
 });
 
+targetSourceInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    setTargetVisibility(getTargetMode());
+  });
+});
+
 accountSelect.addEventListener("change", async () => {
   const domains = await fetchDomains(accountSelect.value);
   populateDomainSelect(domains);
@@ -257,9 +279,45 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const tunnelName = nameInput.value.trim();
-  const targetUrl = targetInput.value.trim();
+  const targetMode = getTargetMode();
+  let targetUrl = targetInput.value.trim();
+  let deploymentId = null;
 
-  if (!tunnelName || !targetUrl) {
+  if (!tunnelName) {
+    return;
+  }
+
+  if (targetMode === "deploy") {
+    const files = Array.from(deployFilesInput.files || []);
+    if (!files.length) {
+      return;
+    }
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+    const startupScript = startupScriptInput.value.trim();
+    if (startupScript) {
+      formData.append("startupScript", startupScript);
+    }
+
+    const deployResponse = await fetch("/api/deployments", {
+      method: "POST",
+      body: formData
+    });
+
+    if (handleUnauthorized(deployResponse)) {
+      return;
+    }
+
+    if (!deployResponse.ok) {
+      return;
+    }
+
+    const deployData = await deployResponse.json();
+    targetUrl = deployData.targetUrl || "";
+    deploymentId = deployData.deploymentId || null;
+  }
+
+  if (!targetUrl) {
     return;
   }
 
@@ -279,6 +337,7 @@ form.addEventListener("submit", async (event) => {
     body: JSON.stringify({
       tunnelName,
       targetUrl,
+      deploymentId,
       tunnelCount,
       proxies,
       proxyType,
@@ -301,4 +360,5 @@ form.addEventListener("submit", async (event) => {
 });
 
 setFieldVisibility(tunnelTypeSelect.value);
+setTargetVisibility(getTargetMode());
 refreshAccountData();
