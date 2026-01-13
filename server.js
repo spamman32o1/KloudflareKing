@@ -13,7 +13,7 @@ const loginConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
 const sessions = new Map();
 
-const createTunnel = (targetUrl, { proxy, proxyType } = {}) => {
+const createTunnel = (targetUrl, { proxy, proxyType, tunnelName } = {}) => {
   const id = `tnl_${Math.random().toString(36).slice(2, 10)}`;
   const subdomain = `free-${id}`;
   const hostname = `${subdomain}.trycloudflare.com`;
@@ -21,6 +21,7 @@ const createTunnel = (targetUrl, { proxy, proxyType } = {}) => {
   return {
     id,
     targetUrl,
+    tunnelName: tunnelName || "Untitled campaign",
     proxy: proxy || null,
     proxyType: proxyType || null,
     hostname,
@@ -97,10 +98,14 @@ app.get("/api/tunnels", (req, res) => {
 });
 
 app.post("/api/tunnels", (req, res) => {
-  const { targetUrl, proxies, proxyType, tunnelCount } = req.body;
+  const { targetUrl, proxies, proxyType, tunnelCount, tunnelName } = req.body;
 
   if (!targetUrl || typeof targetUrl !== "string") {
     return res.status(400).json({ error: "A valid target URL is required." });
+  }
+
+  if (!tunnelName || typeof tunnelName !== "string" || !tunnelName.trim()) {
+    return res.status(400).json({ error: "A tunnel campaign name is required." });
   }
 
   const parsedCount = Number.parseInt(tunnelCount ?? 1, 10);
@@ -120,6 +125,7 @@ app.post("/api/tunnels", (req, res) => {
       ? proxyType.trim()
       : null;
   const trimmedTarget = targetUrl.trim();
+  const trimmedName = tunnelName.trim();
   const created = [];
 
   for (let i = 0; i < parsedCount; i += 1) {
@@ -128,7 +134,8 @@ app.post("/api/tunnels", (req, res) => {
       : null;
     const tunnel = createTunnel(trimmedTarget, {
       proxy: assignedProxy,
-      proxyType: normalizedProxyType
+      proxyType: normalizedProxyType,
+      tunnelName: trimmedName
     });
     tunnels.unshift(tunnel);
     created.push(tunnel);

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create new tunnel</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div>
+          <p class="eyebrow">Cloudflare Tunnel Manager</p>
+          <h1>Create a new tunnel campaign.</h1>
+          <p class="subtitle">
+            Add a campaign name so your tunnels stay organized and easy to
+            manage. You can create one or many tunnels in a single request.
+          </p>
+          <div class="header-actions">
+            <a class="secondary-btn" href="/index.html">Back to dashboard</a>
+          </div>
+        </div>
+        <div class="status-card">
+          <h2>Quick tips</h2>
+          <ul>
+            <li>Campaign names help group tunnel links.</li>
+            <li>Paste proxy lists to distribute traffic.</li>
+            <li>Bulk copy links after creation.</li>
+          </ul>
+        </div>
+      </header>
+
+      <main>
+        <section class="form-panel full-panel">
+          <h2>New tunnel details</h2>
+          <form id="tunnel-form">
+            <label for="tunnel-name">Tunnel campaign name</label>
+            <input
+              id="tunnel-name"
+              name="tunnel-name"
+              type="text"
+              placeholder="Spring product launch"
+              required
+            />
+            <label for="target-url">Target URL</label>
+            <input
+              id="target-url"
+              name="target-url"
+              type="url"
+              placeholder="https://your-local-app.example"
+              required
+            />
+            <label for="tunnel-count">Tunnel amount</label>
+            <input
+              id="tunnel-count"
+              name="tunnel-count"
+              type="number"
+              min="1"
+              max="100"
+              value="1"
+              required
+            />
+            <label for="proxy-type">Proxy type</label>
+            <select id="proxy-type" name="proxy-type">
+              <option value="">No proxy</option>
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+              <option value="socks5">SOCKS5</option>
+            </select>
+            <label for="proxy-file">Proxy list file</label>
+            <input id="proxy-file" name="proxy-file" type="file" accept=".txt" />
+            <label for="proxy-list">Proxy list</label>
+            <textarea
+              id="proxy-list"
+              name="proxy-list"
+              rows="4"
+              placeholder="ip:port or ip:port:user:pass (one per line)"
+            ></textarea>
+            <button type="submit">Create free tunnel</button>
+            <p class="helper">
+              We will return free Cloudflare hostnames and spread tunnels evenly
+              across your proxies.
+            </p>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="create.js"></script>
+  </body>
+</html>
