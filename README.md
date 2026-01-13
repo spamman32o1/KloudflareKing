@@ -6,6 +6,7 @@ A lightweight Node.js + HTML/CSS interface for managing free and named Cloudflar
 
 - Node.js 18+ (or current LTS)
 - npm (ships with Node.js)
+- `cloudflared` installed and available in your PATH (required for free tunnels)
 - A Cloudflare account (required for named tunnels)
 - One or more Cloudflare-managed domains (required for named tunnels)
 
