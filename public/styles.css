@@ -213,6 +213,27 @@ button:hover {
   font-size: 0.85rem;
 }
 
+.option-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.option-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  font-size: 0.9rem;
+}
+
+.option-card input {
+  margin: 0;
+}
+
 .field-group {
   display: flex;
   flex-direction: column;
