@@ -9,6 +9,8 @@
   --muted: #5d6b82;
   --border: #e0e6ef;
   --success: #16a34a;
+  --danger: #dc2626;
+  --danger-dark: #b91c1c;
 }
 
 * {
@@ -187,6 +189,25 @@ button:hover {
   border-color: #c7d3e6;
 }
 
+.danger-btn {
+  background: var(--danger);
+}
+
+.danger-btn:hover {
+  background: var(--danger-dark);
+}
+
+.ghost-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.ghost-btn:hover {
+  background: #f1f4f9;
+  color: var(--text);
+}
+
 .helper {
   color: var(--muted);
   font-size: 0.85rem;
@@ -203,6 +224,12 @@ button:hover {
   flex-direction: column;
   gap: 20px;
   margin-top: 16px;
+}
+
+.confirm-actions {
+  display: none;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .account-panel {
@@ -320,6 +347,13 @@ button:hover {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .card-label {

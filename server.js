@@ -2,7 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { startQuickTunnel } = require("./src/tunnels/cloudflared");
+const { startQuickTunnel, stopTunnel } = require("./src/tunnels/cloudflared");
 const {
   listAccounts,
   saveAccounts,
@@ -480,6 +480,41 @@ app.post("/api/tunnels", async (req, res) => {
   }
 
   res.status(201).json({ tunnels: created });
+});
+
+app.delete("/api/tunnels/:id", (req, res) => {
+  const index = tunnels.findIndex((tunnel) => tunnel.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: "Tunnel not found." });
+  }
+  const [removed] = tunnels.splice(index, 1);
+  if (removed.tunnelType === "free") {
+    stopTunnel(removed.id);
+  }
+  return res.json({ deleted: 1 });
+});
+
+app.delete("/api/campaigns/:name", (req, res) => {
+  const decodedName = decodeURIComponent(req.params.name || "");
+  const matching = tunnels.filter(
+    (tunnel) =>
+      (tunnel.tunnelName?.trim() || "Untitled campaign") === decodedName
+  );
+  if (!matching.length) {
+    return res.status(404).json({ error: "Campaign not found." });
+  }
+  matching.forEach((tunnel) => {
+    if (tunnel.tunnelType === "free") {
+      stopTunnel(tunnel.id);
+    }
+  });
+  const remaining = tunnels.filter(
+    (tunnel) =>
+      (tunnel.tunnelName?.trim() || "Untitled campaign") !== decodedName
+  );
+  tunnels.length = 0;
+  tunnels.push(...remaining);
+  return res.json({ deleted: matching.length });
 });
 
 app.listen(port, () => {

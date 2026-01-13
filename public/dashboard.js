@@ -60,6 +60,10 @@ const renderCampaigns = (tunnels) => {
     const latest = node.querySelector("[data-latest]");
     const link = node.querySelector("[data-link]");
     const copyBtn = node.querySelector(".copy-btn");
+    const deleteBtn = node.querySelector("[data-delete]");
+    const confirmRow = node.querySelector("[data-confirm]");
+    const confirmDeleteBtn = node.querySelector("[data-confirm-delete]");
+    const cancelDeleteBtn = node.querySelector("[data-cancel-delete]");
 
     name.textContent = campaign.name;
     count.textContent = `${campaign.count} tunnel${campaign.count === 1 ? "" : "s"}`;
@@ -83,6 +87,34 @@ const renderCampaigns = (tunnels) => {
         copyBtn.textContent = "Copy all links";
         copyBtn.classList.remove("copied");
       }, 1500);
+    });
+
+    deleteBtn.addEventListener("click", () => {
+      deleteBtn.style.display = "none";
+      confirmRow.style.display = "flex";
+    });
+
+    cancelDeleteBtn.addEventListener("click", () => {
+      confirmRow.style.display = "none";
+      deleteBtn.style.display = "inline-flex";
+    });
+
+    confirmDeleteBtn.addEventListener("click", async () => {
+      const response = await fetch(
+        `/api/campaigns/${encodeURIComponent(campaign.name)}`,
+        { method: "DELETE" }
+      );
+      if (handleUnauthorized(response)) {
+        return;
+      }
+      if (response.ok) {
+        fetchTunnels();
+      } else {
+        confirmDeleteBtn.textContent = "Delete failed";
+        setTimeout(() => {
+          confirmDeleteBtn.textContent = "Confirm delete";
+        }, 1500);
+      }
     });
 
     list.appendChild(node);

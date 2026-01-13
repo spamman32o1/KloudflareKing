@@ -15,14 +15,30 @@
           <p class="subtitle" id="campaign-subtitle"></p>
           <div class="header-actions">
             <a class="secondary-btn" href="/index.html">Back to dashboard</a>
+            <a class="secondary-btn" href="/cloudflare.html">
+              Manage Cloudflare Accounts
+            </a>
           </div>
         </div>
         <div class="status-card">
           <h2>Campaign actions</h2>
           <p>Share or manage this tunnel group in seconds.</p>
-          <button id="copy-all" class="primary-btn" type="button">
-            Copy all links
-          </button>
+          <div class="stack">
+            <button id="copy-all" class="primary-btn" type="button">
+              Copy all links
+            </button>
+            <button id="delete-campaign" class="danger-btn" type="button">
+              Delete campaign
+            </button>
+            <div class="confirm-actions" id="confirm-campaign-delete">
+              <button id="confirm-delete-campaign" class="danger-btn" type="button">
+                Confirm delete
+              </button>
+              <button id="cancel-delete-campaign" class="ghost-btn" type="button">
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -50,7 +66,20 @@
             <p class="card-label">Tunnel Hostname</p>
             <p class="card-value" data-hostname></p>
           </div>
-          <button class="copy-btn" type="button">Copy URL</button>
+          <div class="inline-actions">
+            <button class="copy-btn" type="button">Copy URL</button>
+            <button class="danger-btn" type="button" data-delete>
+              Delete
+            </button>
+            <div class="confirm-actions" data-confirm>
+              <button class="danger-btn" type="button" data-confirm-delete>
+                Confirm
+              </button>
+              <button class="ghost-btn" type="button" data-cancel-delete>
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
         <div class="card-meta">
           <span data-type></span>
