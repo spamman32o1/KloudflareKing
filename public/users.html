@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manage users</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div>
+          <p class="eyebrow">User administration</p>
+          <h1>Manage dashboard logins.</h1>
+          <p class="subtitle">
+            Create new users, adjust roles, and reset passwords without leaving
+            the dashboard.
+          </p>
+          <div class="header-actions">
+            <a class="secondary-btn" href="/index.html">Back to dashboard</a>
+          </div>
+        </div>
+        <div class="status-card">
+          <h2>Roles explained</h2>
+          <p>Admins can manage users and Cloudflare accounts.</p>
+          <ul>
+            <li>Admins: full access</li>
+            <li>Users: create tunnels only</li>
+          </ul>
+        </div>
+      </header>
+
+      <main>
+        <section class="form-panel">
+          <h2>Create new user</h2>
+          <p class="muted">Add a login and choose the correct role.</p>
+          <form id="user-form">
+            <label for="new-username">Username</label>
+            <input
+              id="new-username"
+              name="new-username"
+              type="text"
+              autocomplete="username"
+              placeholder="new-user"
+              required
+            />
+            <label for="new-password">Password</label>
+            <input
+              id="new-password"
+              name="new-password"
+              type="password"
+              autocomplete="new-password"
+              placeholder="Create a secure password"
+              required
+            />
+            <label for="new-role">Role</label>
+            <select id="new-role" name="new-role" required>
+              <option value="admin">Admin</option>
+              <option value="user">User</option>
+            </select>
+            <button type="submit">Create user</button>
+            <p id="user-error" class="error" role="alert"></p>
+          </form>
+        </section>
+
+        <section class="list-panel">
+          <div class="list-header">
+            <div>
+              <h2>Existing users</h2>
+              <p class="muted">Update a user's role or reset passwords.</p>
+            </div>
+            <button id="refresh-users" type="button">Refresh</button>
+          </div>
+          <div id="user-list" class="user-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="user-card">
+      <article class="user-card">
+        <div>
+          <p class="card-label">Username</p>
+          <p class="card-title" data-username></p>
+          <p class="card-meta" data-created></p>
+        </div>
+        <div class="user-actions">
+          <label class="sr-only" for="role-select">Role</label>
+          <select data-role>
+            <option value="admin">Admin</option>
+            <option value="user">User</option>
+          </select>
+          <input
+            type="password"
+            placeholder="New password"
+            autocomplete="new-password"
+            data-password
+          />
+          <button class="secondary-btn" type="button" data-save>
+            Save changes
+          </button>
+          <span class="muted" data-status></span>
+        </div>
+      </article>
+    </template>
+
+    <script src="users.js"></script>
+  </body>
+</html>

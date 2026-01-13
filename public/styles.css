@@ -292,6 +292,48 @@ button:hover {
   padding: 8px 12px;
 }
 
+.user-list {
+  display: grid;
+  gap: 12px;
+}
+
+.user-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+}
+
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.user-actions select,
+.user-actions input {
+  min-width: 160px;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
 .domain-list {
   margin-top: 12px;
   border: 1px dashed var(--border);
