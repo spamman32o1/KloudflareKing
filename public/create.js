@@ -21,10 +21,9 @@ const accountForm = document.querySelector("#account-form");
 const accountLabelInput = document.querySelector("#account-label");
 const accountEmailInput = document.querySelector("#account-email");
 const accountIdInput = document.querySelector("#account-id");
+const accountTokenInput = document.querySelector("#account-token");
 const accountList = document.querySelector("#account-list");
 const refreshAccountsBtn = document.querySelector("#refresh-accounts");
-const domainForm = document.querySelector("#domain-form");
-const domainInput = document.querySelector("#domain-input");
 const domainList = document.querySelector("#domain-list");
 
 const handleUnauthorized = (response) => {
@@ -50,7 +49,7 @@ const setFieldVisibility = (mode) => {
   tunnelCountInput.required = !isNamed;
   submitBtn.textContent = isNamed ? "Create named tunnel" : "Create free tunnels";
   helperText.textContent = isNamed
-    ? "Named tunnels use a single active proxy. After 3 failures, we rotate to your fallback list."
+    ? "Named tunnels use your Cloudflare API token to create the tunnel and DNS record."
     : "We will return free Cloudflare hostnames and spread tunnels evenly across your proxies.";
 };
 
@@ -107,34 +106,23 @@ const renderAccountList = (accounts) => {
     title.innerHTML = `<strong>${account.label}</strong><br /><span class="muted">${account.email}</span>`;
 
     const status = document.createElement("span");
-    status.className = `status-pill${account.status === "connected" ? " connected" : ""}`;
-    status.textContent = account.status === "connected" ? "Connected" : "Pending";
+    const isConnected = account.status === "connected";
+    status.className = `status-pill${isConnected ? " connected" : ""}`;
+    status.textContent = isConnected ? "Connected" : account.status === "error" ? "Error" : "Pending";
 
     header.appendChild(title);
     header.appendChild(status);
 
-    const login = document.createElement("div");
-    login.className = "muted";
-    login.innerHTML = `Login URL: <a href="${account.loginUrl}" target="_blank" rel="noreferrer">${account.loginUrl}</a>`;
-
     const meta = document.createElement("div");
     meta.className = "muted";
-    meta.textContent = `Domains: ${account.domains.length}`;
+    meta.textContent = `Zones accessible: ${account.zoneCount ?? 0}`;
 
     const actions = document.createElement("div");
     actions.className = "account-actions";
 
-    const openBtn = document.createElement("a");
-    openBtn.className = "secondary-btn";
-    openBtn.href = account.loginUrl;
-    openBtn.target = "_blank";
-    openBtn.rel = "noreferrer";
-    openBtn.textContent = "Open login";
-
     const markBtn = document.createElement("button");
     markBtn.type = "button";
-    markBtn.textContent = "Mark connected";
-    markBtn.disabled = account.status === "connected";
+    markBtn.textContent = "Validate token";
     markBtn.addEventListener("click", async () => {
       const response = await fetch(`/api/cloudflare/accounts/${account.id}/login`, {
         method: "POST"
@@ -145,11 +133,9 @@ const renderAccountList = (accounts) => {
       await refreshAccountData();
     });
 
-    actions.appendChild(openBtn);
     actions.appendChild(markBtn);
 
     card.appendChild(header);
-    card.appendChild(login);
     card.appendChild(meta);
     card.appendChild(actions);
     accountList.appendChild(card);
@@ -240,8 +226,9 @@ accountForm.addEventListener("submit", async (event) => {
   const label = accountLabelInput.value.trim();
   const email = accountEmailInput.value.trim();
   const accountId = accountIdInput.value.trim();
+  const apiToken = accountTokenInput.value.trim();
 
-  if (!label || !email || !accountId) {
+  if (!label || !email || !accountId || !apiToken) {
     return;
   }
 
@@ -250,7 +237,7 @@ accountForm.addEventListener("submit", async (event) => {
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ label, email, accountId })
+    body: JSON.stringify({ label, email, accountId, apiToken })
   });
 
   if (handleUnauthorized(response)) {
@@ -261,34 +248,8 @@ accountForm.addEventListener("submit", async (event) => {
     accountLabelInput.value = "";
     accountEmailInput.value = "";
     accountIdInput.value = "";
+    accountTokenInput.value = "";
     await refreshAccountData();
-  }
-});
-
-domainForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const hostname = domainInput.value.trim();
-  if (!hostname || !accountSelect.value) {
-    return;
-  }
-  const response = await fetch(
-    `/api/cloudflare/accounts/${accountSelect.value}/domains`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ hostname })
-    }
-  );
-  if (handleUnauthorized(response)) {
-    return;
-  }
-  if (response.ok) {
-    domainInput.value = "";
-    const domains = await fetchDomains(accountSelect.value);
-    populateDomainSelect(domains);
-    renderDomainList(domains);
   }
 });
 
