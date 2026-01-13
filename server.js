@@ -13,7 +13,7 @@ const loginConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
 const sessions = new Map();
 
-const createTunnel = (targetUrl) => {
+const createTunnel = (targetUrl, { proxy, proxyType } = {}) => {
   const id = `tnl_${Math.random().toString(36).slice(2, 10)}`;
   const subdomain = `free-${id}`;
   const hostname = `${subdomain}.trycloudflare.com`;
@@ -21,6 +21,8 @@ const createTunnel = (targetUrl) => {
   return {
     id,
     targetUrl,
+    proxy: proxy || null,
+    proxyType: proxyType || null,
     hostname,
     status: "active",
     createdAt: new Date().toISOString()
@@ -95,15 +97,44 @@ app.get("/api/tunnels", (req, res) => {
 });
 
 app.post("/api/tunnels", (req, res) => {
-  const { targetUrl } = req.body;
+  const { targetUrl, proxies, proxyType, tunnelCount } = req.body;
 
   if (!targetUrl || typeof targetUrl !== "string") {
     return res.status(400).json({ error: "A valid target URL is required." });
   }
 
-  const tunnel = createTunnel(targetUrl.trim());
-  tunnels.unshift(tunnel);
-  res.status(201).json(tunnel);
+  const parsedCount = Number.parseInt(tunnelCount ?? 1, 10);
+  if (!Number.isInteger(parsedCount) || parsedCount < 1 || parsedCount > 100) {
+    return res
+      .status(400)
+      .json({ error: "Tunnel count must be an integer between 1 and 100." });
+  }
+
+  const proxyList = Array.isArray(proxies)
+    ? proxies
+        .map((proxy) => (typeof proxy === "string" ? proxy.trim() : ""))
+        .filter(Boolean)
+    : [];
+  const normalizedProxyType =
+    typeof proxyType === "string" && proxyType.trim().length
+      ? proxyType.trim()
+      : null;
+  const trimmedTarget = targetUrl.trim();
+  const created = [];
+
+  for (let i = 0; i < parsedCount; i += 1) {
+    const assignedProxy = proxyList.length
+      ? proxyList[i % proxyList.length]
+      : null;
+    const tunnel = createTunnel(trimmedTarget, {
+      proxy: assignedProxy,
+      proxyType: normalizedProxyType
+    });
+    tunnels.unshift(tunnel);
+    created.push(tunnel);
+  }
+
+  res.status(201).json({ tunnels: created });
 });
 
 app.listen(port, () => {
