@@ -5,6 +5,10 @@ const emptyState = document.querySelector("#empty-state");
 const refreshBtn = document.querySelector("#refresh-btn");
 const template = document.querySelector("#tunnel-card");
 const copyAllBtn = document.querySelector("#copy-all");
+const deleteCampaignBtn = document.querySelector("#delete-campaign");
+const confirmCampaignDelete = document.querySelector("#confirm-campaign-delete");
+const confirmDeleteCampaignBtn = document.querySelector("#confirm-delete-campaign");
+const cancelDeleteCampaignBtn = document.querySelector("#cancel-delete-campaign");
 
 const params = new URLSearchParams(window.location.search);
 const campaignName = params.get("name");
@@ -42,6 +46,10 @@ const renderTunnels = (tunnels) => {
     const proxyRotation = node.querySelector("[data-proxy-rotation]");
     const created = node.querySelector("[data-created]");
     const copyBtn = node.querySelector(".copy-btn");
+    const deleteBtn = node.querySelector("[data-delete]");
+    const confirmRow = node.querySelector("[data-confirm]");
+    const confirmDeleteBtn = node.querySelector("[data-confirm-delete]");
+    const cancelDeleteBtn = node.querySelector("[data-cancel-delete]");
 
     hostname.textContent = `https://${tunnel.hostname}`;
     type.textContent = `Type: ${tunnel.tunnelType === "named" ? "named" : "free"}`;
@@ -74,6 +82,33 @@ const renderTunnels = (tunnels) => {
         copyBtn.textContent = "Copy URL";
         copyBtn.classList.remove("copied");
       }, 1500);
+    });
+
+    deleteBtn.addEventListener("click", () => {
+      deleteBtn.style.display = "none";
+      confirmRow.style.display = "flex";
+    });
+
+    cancelDeleteBtn.addEventListener("click", () => {
+      confirmRow.style.display = "none";
+      deleteBtn.style.display = "inline-flex";
+    });
+
+    confirmDeleteBtn.addEventListener("click", async () => {
+      const response = await fetch(`/api/tunnels/${tunnel.id}`, {
+        method: "DELETE"
+      });
+      if (handleUnauthorized(response)) {
+        return;
+      }
+      if (response.ok) {
+        fetchTunnels();
+      } else {
+        confirmDeleteBtn.textContent = "Delete failed";
+        setTimeout(() => {
+          confirmDeleteBtn.textContent = "Confirm";
+        }, 1500);
+      }
     });
 
     list.appendChild(node);
@@ -114,3 +149,31 @@ if (!campaignName) {
 }
 
 refreshBtn.addEventListener("click", fetchTunnels);
+
+deleteCampaignBtn.addEventListener("click", () => {
+  deleteCampaignBtn.style.display = "none";
+  confirmCampaignDelete.style.display = "flex";
+});
+
+cancelDeleteCampaignBtn.addEventListener("click", () => {
+  confirmCampaignDelete.style.display = "none";
+  deleteCampaignBtn.style.display = "inline-flex";
+});
+
+confirmDeleteCampaignBtn.addEventListener("click", async () => {
+  const response = await fetch(
+    `/api/campaigns/${encodeURIComponent(campaignName)}`,
+    { method: "DELETE" }
+  );
+  if (handleUnauthorized(response)) {
+    return;
+  }
+  if (response.ok) {
+    window.location.href = "/index.html";
+  } else {
+    confirmDeleteCampaignBtn.textContent = "Delete failed";
+    setTimeout(() => {
+      confirmDeleteCampaignBtn.textContent = "Confirm delete";
+    }, 1500);
+  }
+});
