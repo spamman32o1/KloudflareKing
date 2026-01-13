@@ -1,0 +1,10 @@
+<FilesMatch "^(index\.html|app\.js|styles\.css)$">
+  AuthType Basic
+  AuthName "Tunnel Manager"
+  AuthUserFile /etc/apache2/.htpasswd
+  Require valid-user
+</FilesMatch>
+
+<FilesMatch "^login\.(html|js|css)$">
+  Require all granted
+</FilesMatch>

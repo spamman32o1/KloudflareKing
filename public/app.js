@@ -5,6 +5,14 @@ const emptyState = document.querySelector("#empty-state");
 const refreshBtn = document.querySelector("#refresh-btn");
 const template = document.querySelector("#tunnel-card");
 
+const handleUnauthorized = (response) => {
+  if (response.status === 401) {
+    window.location.href = "/login.html";
+    return true;
+  }
+  return false;
+};
+
 const renderTunnels = (tunnels) => {
   list.innerHTML = "";
 
@@ -42,6 +50,9 @@ const renderTunnels = (tunnels) => {
 
 const fetchTunnels = async () => {
   const response = await fetch("/api/tunnels");
+  if (handleUnauthorized(response)) {
+    return;
+  }
   const data = await response.json();
   renderTunnels(data.tunnels);
 };
@@ -61,6 +72,10 @@ form.addEventListener("submit", async (event) => {
     },
     body: JSON.stringify({ targetUrl })
   });
+
+  if (handleUnauthorized(response)) {
+    return;
+  }
 
   if (response.ok) {
     input.value = "";
