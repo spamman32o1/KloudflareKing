@@ -21,15 +21,15 @@
             <a class="secondary-btn" href="/index.html">Back to dashboard</a>
           </div>
         </div>
-        <div class="status-card">
-          <h2>Quick tips</h2>
-          <ul>
-            <li>Campaign names help group tunnel links.</li>
-            <li>Paste proxy lists to distribute traffic.</li>
-            <li>Bulk copy links after creation.</li>
-          </ul>
-        </div>
-      </header>
+          <div class="status-card">
+            <h2>Quick tips</h2>
+            <ul>
+              <li>Campaign names help group tunnel links.</li>
+              <li>Paste proxy lists to distribute traffic.</li>
+              <li>Named tunnels require an API token with Tunnel + DNS edit permissions.</li>
+            </ul>
+          </div>
+        </header>
 
       <main>
         <section class="form-panel full-panel">
@@ -139,8 +139,10 @@
         <section class="form-panel">
           <h2>Cloudflare accounts & domains</h2>
           <p class="muted">
-            Named tunnels require an authenticated Cloudflare account and a
-            verified domain. Follow the
+            Named tunnels require a Cloudflare API token tied to the account
+            you want to use. The token must allow Tunnel creation and DNS
+            record edits for the zones you plan to publish.
+            Follow the
             <a
               href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/"
               target="_blank"
@@ -176,34 +178,34 @@
                 placeholder="a1b2c3d4"
                 required
               />
+              <label for="account-token">Cloudflare API token</label>
+              <input
+                id="account-token"
+                name="account-token"
+                type="password"
+                placeholder="Token with Tunnel + DNS edit permissions"
+                required
+              />
               <button type="submit">Add account</button>
             </form>
             <div class="account-panel">
               <div class="list-header">
                 <div>
                   <h3>Connected accounts</h3>
-                  <p class="muted">Open the login URL to connect each account.</p>
+                  <p class="muted">Validate token access to refresh connected status.</p>
                 </div>
                 <button id="refresh-accounts" type="button">Refresh</button>
               </div>
               <div id="account-list" class="account-list"></div>
             </div>
-            <form id="domain-form">
-              <h3>Add a domain to the selected account</h3>
-              <label for="domain-input">Domain name</label>
-              <input
-                id="domain-input"
-                name="domain-input"
-                type="text"
-                placeholder="example.com"
-                required
-              />
-              <button type="submit">Add domain</button>
+            <div>
+              <h3>Available domains</h3>
               <p class="helper">
-                Domains listed here populate the named tunnel domain selector.
+                Domains are pulled directly from the Cloudflare Zones API for the
+                selected account.
               </p>
               <div id="domain-list" class="domain-list"></div>
-            </form>
+            </div>
           </div>
         </section>
       </main>
