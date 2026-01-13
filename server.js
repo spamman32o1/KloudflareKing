@@ -3,6 +3,14 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { startQuickTunnel, stopTunnel } = require("./src/tunnels/cloudflared");
+const { logError } = require("./src/utils/logger");
+const {
+  ensureUserStore,
+  listUsers,
+  saveUsers,
+  sanitizeUser,
+  findUserByUsername
+} = require("./src/users/store");
 const {
   listAccounts,
   saveAccounts,
@@ -22,8 +30,25 @@ app.use(express.json());
 
 const configPath = path.join(__dirname, "config.json");
 const loginConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+const defaultAdmin = {
+  id: `user_${crypto.randomBytes(6).toString("hex")}`,
+  username: loginConfig.username,
+  password: loginConfig.password,
+  role: "admin",
+  createdAt: new Date().toISOString()
+};
+ensureUserStore(defaultAdmin);
 
 const sessions = new Map();
+
+process.on("unhandledRejection", (error) => {
+  logError(error, "unhandledRejection");
+});
+
+process.on("uncaughtException", (error) => {
+  logError(error, "uncaughtException");
+  process.exit(1);
+});
 
 const createTunnelId = () =>
   `tnl_${Math.random().toString(36).slice(2, 10)}`;
@@ -81,11 +106,29 @@ const parseCookies = (cookieHeader = "") =>
     return acc;
   }, {});
 
-const isAuthenticated = (req) => {
+const getSession = (req) => {
   const cookies = parseCookies(req.headers.cookie);
   const token = cookies.auth_token;
-  return token && sessions.has(token);
+  if (!token || !sessions.has(token)) {
+    return null;
+  }
+  return sessions.get(token);
 };
+
+const resolveSessionUser = (req) => {
+  const session = getSession(req);
+  if (!session) {
+    return null;
+  }
+  const user = findUserByUsername(session.username);
+  if (!user) {
+    return null;
+  }
+  session.role = user.role;
+  return { ...session, role: user.role, id: user.id };
+};
+
+const isAuthenticated = (req) => !!resolveSessionUser(req);
 
 const authMiddleware = (req, res, next) => {
   const openPaths = new Set([
@@ -99,7 +142,11 @@ const authMiddleware = (req, res, next) => {
     return next();
   }
 
-  if (isAuthenticated(req)) {
+  const sessionUser = resolveSessionUser(req);
+  if (sessionUser) {
+    if (req.path === "/users.html" && sessionUser.role !== "admin") {
+      return res.redirect("/index.html");
+    }
     return next();
   }
 
@@ -113,12 +160,14 @@ const authMiddleware = (req, res, next) => {
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
 
-  if (
-    username === loginConfig.username &&
-    password === loginConfig.password
-  ) {
+  const user = findUserByUsername(username);
+  if (user && user.password === password) {
     const token = crypto.randomBytes(24).toString("hex");
-    sessions.set(token, { createdAt: Date.now() });
+    sessions.set(token, {
+      createdAt: Date.now(),
+      username: user.username,
+      role: user.role
+    });
     res.setHeader(
       "Set-Cookie",
       `auth_token=${token}; HttpOnly; SameSite=Strict; Path=/`
@@ -131,6 +180,93 @@ app.post("/api/login", (req, res) => {
 
 app.use(authMiddleware);
 app.use(express.static("public"));
+
+app.get("/api/session", (req, res) => {
+  const sessionUser = resolveSessionUser(req);
+  if (!sessionUser) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  return res.json({
+    user: sanitizeUser({
+      id: sessionUser.id,
+      username: sessionUser.username,
+      role: sessionUser.role
+    })
+  });
+});
+
+const requireAdmin = (req, res, next) => {
+  const sessionUser = resolveSessionUser(req);
+  if (!sessionUser) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (sessionUser.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required." });
+  }
+  return next();
+};
+
+const allowedRoles = new Set(["admin", "user"]);
+
+app.get("/api/users", requireAdmin, (req, res) => {
+  const users = listUsers().map(sanitizeUser);
+  res.json({ users });
+});
+
+app.post("/api/users", requireAdmin, (req, res) => {
+  const { username, password, role } = req.body;
+  if (!username || typeof username !== "string" || !username.trim()) {
+    return res.status(400).json({ error: "Username is required." });
+  }
+  if (!password || typeof password !== "string" || !password.trim()) {
+    return res.status(400).json({ error: "Password is required." });
+  }
+  if (!role || !allowedRoles.has(role)) {
+    return res.status(400).json({ error: "Role must be admin or user." });
+  }
+  const trimmedUsername = username.trim();
+  const users = listUsers();
+  if (users.some((user) => user.username === trimmedUsername)) {
+    return res.status(409).json({ error: "Username already exists." });
+  }
+  const user = {
+    id: `user_${crypto.randomBytes(6).toString("hex")}`,
+    username: trimmedUsername,
+    password: password.trim(),
+    role,
+    createdAt: new Date().toISOString()
+  };
+  users.unshift(user);
+  saveUsers(users);
+  return res.status(201).json({ user: sanitizeUser(user) });
+});
+
+app.put("/api/users/:id", requireAdmin, (req, res) => {
+  const { role, password } = req.body;
+  if (!role && !password) {
+    return res.status(400).json({ error: "Provide a role or password update." });
+  }
+  if (role && !allowedRoles.has(role)) {
+    return res.status(400).json({ error: "Role must be admin or user." });
+  }
+  if (password && (typeof password !== "string" || !password.trim())) {
+    return res.status(400).json({ error: "Password cannot be empty." });
+  }
+  const users = listUsers();
+  const index = users.findIndex((user) => user.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: "User not found." });
+  }
+  const updated = {
+    ...users[index],
+    role: role || users[index].role,
+    password: password ? password.trim() : users[index].password,
+    updatedAt: new Date().toISOString()
+  };
+  users[index] = updated;
+  saveUsers(users);
+  return res.json({ user: sanitizeUser(updated) });
+});
 
 const tunnels = [];
 
@@ -200,6 +336,7 @@ app.post("/api/cloudflare/accounts", async (req, res) => {
     await fetchAccountDetails(trimmedAccountId, trimmedToken);
     zones = await listZones(trimmedAccountId, trimmedToken);
   } catch (error) {
+    logError(error, "POST /api/cloudflare/accounts");
     return res.status(400).json({ error: error.message });
   }
 
@@ -237,6 +374,7 @@ app.post("/api/cloudflare/accounts/:id/login", async (req, res) => {
     }));
     return res.json({ account: sanitizeAccount(updated) });
   } catch (error) {
+    logError(error, `POST /api/cloudflare/accounts/${account.id}/login`);
     const updated = updateAccount(account.id, (current) => ({
       ...current,
       status: "error"
@@ -258,6 +396,7 @@ app.get("/api/cloudflare/accounts/:id/domains", async (req, res) => {
     const domains = zones.map((zone) => zone.name).sort();
     return res.json({ domains });
   } catch (error) {
+    logError(error, `GET /api/cloudflare/accounts/${account.id}/domains`);
     return res.status(400).json({ error: error.message });
   }
 });
@@ -287,6 +426,7 @@ app.post("/api/cloudflare/accounts/:id/domains", async (req, res) => {
     }
     return res.status(200).json({ domain: normalized, zoneId: matched.id });
   } catch (error) {
+    logError(error, `POST /api/cloudflare/accounts/${account.id}/domains`);
     return res.status(400).json({ error: error.message });
   }
 });
@@ -392,6 +532,7 @@ app.post("/api/tunnels", async (req, res) => {
       }
       zoneId = zone.id;
     } catch (error) {
+      logError(error, "POST /api/tunnels (list zones)");
       return res.status(400).json({ error: error.message });
     }
   }
@@ -473,6 +614,7 @@ app.post("/api/tunnels", async (req, res) => {
       created.push(tunnel);
     }
   } catch (error) {
+    logError(error, "POST /api/tunnels (create)");
     return res.status(500).json({
       error: "Failed to start cloudflared tunnel.",
       details: error.message
@@ -515,6 +657,11 @@ app.delete("/api/campaigns/:name", (req, res) => {
   tunnels.length = 0;
   tunnels.push(...remaining);
   return res.json({ deleted: matching.length });
+});
+
+app.use((err, req, res, next) => {
+  logError(err, `${req.method} ${req.path}`);
+  res.status(500).json({ error: "Internal server error." });
 });
 
 app.listen(port, () => {

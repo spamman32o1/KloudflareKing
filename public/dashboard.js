@@ -2,6 +2,7 @@ const list = document.querySelector("#campaign-list");
 const emptyState = document.querySelector("#empty-state");
 const refreshBtn = document.querySelector("#refresh-btn");
 const template = document.querySelector("#campaign-card");
+const manageUsersBtn = document.querySelector("#manage-users-btn");
 
 const handleUnauthorized = (response) => {
   if (response.status === 401) {
@@ -130,6 +131,21 @@ const fetchTunnels = async () => {
   renderCampaigns(data.tunnels);
 };
 
+const fetchSession = async () => {
+  if (!manageUsersBtn) {
+    return;
+  }
+  const response = await fetch("/api/session");
+  if (handleUnauthorized(response)) {
+    return;
+  }
+  const data = await response.json();
+  if (!data.user || data.user.role !== "admin") {
+    manageUsersBtn.classList.add("is-hidden");
+  }
+};
+
 refreshBtn.addEventListener("click", fetchTunnels);
 
 fetchTunnels();
+fetchSession();
