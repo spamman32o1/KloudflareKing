@@ -7,6 +7,10 @@ const targetUrlSection = document.querySelector('[data-target="url"]');
 const targetDeploySection = document.querySelector('[data-target="deploy"]');
 const deployFilesInput = document.querySelector("#deploy-files");
 const startupScriptInput = document.querySelector("#startup-script");
+const projectSelect = document.querySelector("#project-select");
+const projectNameInput = document.querySelector("#project-name");
+const saveProjectBtn = document.querySelector("#save-project-btn");
+const projectStatus = document.querySelector("#project-status");
 const tunnelCountInput = document.querySelector("#tunnel-count");
 const proxyTypeInput = document.querySelector("#proxy-type");
 const proxyFileInput = document.querySelector("#proxy-file");
@@ -23,6 +27,8 @@ const namedProxyListInput = document.querySelector("#named-proxy-list");
 const submitBtn = document.querySelector("#submit-btn");
 const helperText = document.querySelector("#form-helper");
 
+let cachedProjects = [];
+
 const handleUnauthorized = (response) => {
   if (response.status === 401) {
     window.location.href = "/login.html";
@@ -37,6 +43,24 @@ const parseProxyList = (value) =>
     .map((proxy) => proxy.trim())
     .filter(Boolean);
 
+const setProjectStatus = (message, tone = "info") => {
+  if (!projectStatus) {
+    return;
+  }
+  projectStatus.textContent = message;
+  if (!message) {
+    projectStatus.style.color = "";
+    return;
+  }
+  if (tone === "error") {
+    projectStatus.style.color = "var(--danger)";
+  } else if (tone === "success") {
+    projectStatus.style.color = "var(--success)";
+  } else {
+    projectStatus.style.color = "";
+  }
+};
+
 const setFieldVisibility = (mode) => {
   const isNamed = mode === "named";
   namedSection.style.display = isNamed ? "flex" : "none";
@@ -50,12 +74,22 @@ const setFieldVisibility = (mode) => {
     : "We will return free Cloudflare hostnames and spread tunnels evenly across your proxies.";
 };
 
+const syncDeployInputs = () => {
+  if (!deployFilesInput) {
+    return;
+  }
+  const isDeploy = getTargetMode() === "deploy";
+  const hasProject = projectSelect?.value;
+  deployFilesInput.disabled = Boolean(hasProject);
+  deployFilesInput.required = isDeploy && !hasProject;
+};
+
 const setTargetVisibility = (mode) => {
   const isDeploy = mode === "deploy";
   targetDeploySection.style.display = isDeploy ? "flex" : "none";
   targetUrlSection.style.display = isDeploy ? "none" : "flex";
   targetInput.required = !isDeploy;
-  deployFilesInput.required = isDeploy;
+  syncDeployInputs();
 };
 
 const getTargetMode = () =>
@@ -108,6 +142,47 @@ const populateDomainSelect = (domains) => {
   domainSelect.value = currentValue;
 };
 
+const fetchProjects = async () => {
+  const response = await fetch("/api/projects");
+  if (handleUnauthorized(response)) {
+    return [];
+  }
+  const data = await response.json();
+  return Array.isArray(data.projects) ? data.projects : [];
+};
+
+const populateProjectSelect = (projects) => {
+  if (!projectSelect) {
+    return;
+  }
+  const currentValue = projectSelect.value;
+  projectSelect.innerHTML = '<option value="">Upload new files</option>';
+  projects.forEach((project) => {
+    const option = document.createElement("option");
+    option.value = project.id;
+    option.textContent = project.name;
+    projectSelect.appendChild(option);
+  });
+  projectSelect.value = currentValue;
+};
+
+const applyProjectSelection = () => {
+  if (!projectSelect) {
+    return;
+  }
+  const selected = cachedProjects.find((project) => project.id === projectSelect.value);
+  if (selected) {
+    startupScriptInput.value = selected.startupScript || "";
+  }
+  syncDeployInputs();
+};
+
+const refreshProjectData = async () => {
+  cachedProjects = await fetchProjects();
+  populateProjectSelect(cachedProjects);
+  applyProjectSelection();
+};
+
 const refreshAccountData = async () => {
   const accounts = await fetchAccounts();
   populateAccountSelect(accounts);
@@ -156,6 +231,58 @@ targetSourceInputs.forEach((input) => {
   });
 });
 
+if (projectSelect) {
+  projectSelect.addEventListener("change", () => {
+    setProjectStatus("");
+    applyProjectSelection();
+  });
+}
+
+if (saveProjectBtn) {
+  saveProjectBtn.addEventListener("click", async () => {
+    setProjectStatus("");
+    const projectName = projectNameInput.value.trim();
+    if (!projectName) {
+      setProjectStatus("Enter a name to save this project bundle.", "error");
+      return;
+    }
+    const files = Array.from(deployFilesInput.files || []);
+    if (!files.length) {
+      setProjectStatus("Choose project files or a zip before saving.", "error");
+      return;
+    }
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+    const startupScript = startupScriptInput.value.trim();
+    if (startupScript) {
+      formData.append("startupScript", startupScript);
+    }
+    formData.append("projectName", projectName);
+
+    const response = await fetch("/api/projects", {
+      method: "POST",
+      body: formData
+    });
+
+    if (handleUnauthorized(response)) {
+      return;
+    }
+
+    if (!response.ok) {
+      setProjectStatus("Unable to save the project bundle.", "error");
+      return;
+    }
+
+    const data = await response.json();
+    await refreshProjectData();
+    if (data.project?.id) {
+      projectSelect.value = data.project.id;
+      applyProjectSelection();
+    }
+    setProjectStatus("Project saved and ready to reuse.", "success");
+  });
+}
+
 accountSelect.addEventListener("change", async () => {
   const domains = await fetchDomains(accountSelect.value);
   populateDomainSelect(domains);
@@ -170,12 +297,17 @@ form.addEventListener("submit", async (event) => {
   let deploymentId = null;
 
   if (targetMode === "deploy") {
+    const selectedProjectId = projectSelect?.value?.trim();
     const files = Array.from(deployFilesInput.files || []);
-    if (!files.length) {
+    if (!selectedProjectId && !files.length) {
       return;
     }
     const formData = new FormData();
-    files.forEach((file) => formData.append("files", file));
+    if (selectedProjectId) {
+      formData.append("projectId", selectedProjectId);
+    } else {
+      files.forEach((file) => formData.append("files", file));
+    }
     const startupScript = startupScriptInput.value.trim();
     if (startupScript) {
       formData.append("startupScript", startupScript);
@@ -249,3 +381,4 @@ form.addEventListener("submit", async (event) => {
 setFieldVisibility(tunnelTypeSelect.value);
 setTargetVisibility(getTargetMode());
 refreshAccountData();
+refreshProjectData();
