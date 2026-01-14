@@ -5,7 +5,7 @@ const { spawn } = require("child_process");
 const loginSessions = new Map();
 const loginUrlPattern = /https?:\/\/[^\s"')]+/gi;
 const tokenizedLoginPattern =
-  /https?:\/\/[^\s"')]*dash\.cloudflare\.com\/argotunnel\?[^\s"')]+/i;
+  /https:\/\/dash\.cloudflare\.com\/argotunnel\?(?=[^\s"')]*\baud=)(?=[^\s"')]*\bcallback=)[^\s"')]+/i;
 
 const ensureCertDir = (certPath) => {
   const dir = path.dirname(certPath);
@@ -56,8 +56,12 @@ const startCloudflaredLogin = ({ sessionId, certPath } = {}) =>
 
     const handleOutput = (data) => {
       const text = data.toString();
+      const normalizedText = text.replace(/[\r\n]+/g, "");
       record.output.push(text);
-      const urls = Array.from(text.matchAll(loginUrlPattern), (match) => match[0]);
+      const urls = Array.from(
+        normalizedText.matchAll(loginUrlPattern),
+        (match) => match[0]
+      );
       if (!urls.length) {
         return;
       }
