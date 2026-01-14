@@ -674,10 +674,16 @@ app.post("/api/cloudflare/accounts", async (req, res) => {
   if (!label || typeof label !== "string" || !label.trim()) {
     return res.status(400).json({ error: "Account label is required." });
   }
-  if (!email || typeof email !== "string" || !email.trim()) {
+  if (
+    normalizedAuthType === "token" &&
+    (!email || typeof email !== "string" || !email.trim())
+  ) {
     return res.status(400).json({ error: "Account email is required." });
   }
-  if (!accountId || typeof accountId !== "string" || !accountId.trim()) {
+  if (
+    normalizedAuthType === "token" &&
+    (!accountId || typeof accountId !== "string" || !accountId.trim())
+  ) {
     return res.status(400).json({ error: "Cloudflare account ID is required." });
   }
   if (
@@ -688,16 +694,22 @@ app.post("/api/cloudflare/accounts", async (req, res) => {
   }
 
   const trimmedLabel = label.trim();
-  const trimmedEmail = email.trim();
-  const trimmedAccountId = accountId.trim();
+  const trimmedEmail =
+    typeof email === "string" && email.trim() ? email.trim() : null;
+  const trimmedAccountId =
+    typeof accountId === "string" && accountId.trim() ? accountId.trim() : null;
   const trimmedToken =
     typeof apiToken === "string" && apiToken.trim() ? apiToken.trim() : null;
   const accounts = listAccounts();
-  const existing = accounts.find(
-    (account) => account.accountId === trimmedAccountId
-  );
-  if (existing) {
-    return res.status(409).json({ error: "That Cloudflare account already exists." });
+  if (trimmedAccountId) {
+    const existing = accounts.find(
+      (account) => account.accountId === trimmedAccountId
+    );
+    if (existing) {
+      return res
+        .status(409)
+        .json({ error: "That Cloudflare account already exists." });
+    }
   }
 
   let zones = [];
