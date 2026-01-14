@@ -382,12 +382,17 @@ const stopDeploymentProcess = (deployment) => {
 };
 
 const stopDeployment = (deploymentId) => {
-  const deployment = deployments.get(deploymentId);
-  if (!deployment) {
+  const resolved = resolveDeploymentDirs(deploymentId);
+  if (!resolved) {
     return;
   }
-  stopDeploymentProcess(deployment);
+  stopDeploymentProcess(resolved.deployment);
   deployments.delete(deploymentId);
+  try {
+    fs.rmSync(resolved.baseDir, { recursive: true, force: true });
+  } catch (error) {
+    logError(error, `remove deployment ${deploymentId}`);
+  }
 };
 
 const resolveDeploymentDirs = (deploymentId) => {
