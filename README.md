@@ -26,9 +26,11 @@ A lightweight Node.js + HTML/CSS interface for managing free and named Cloudflar
 ## Features
 
 - 🔐 **Secure** login-protected UI backed by an Express API.
-- 🚀 **Blazing-fast** free tunnel campaigns with configurable tunnel counts and optional proxy rotation.
+- 🚀 **Blazing-fast** free tunnel campaigns with configurable tunnel counts.
 - 🌐 **Powerful** named tunnels tied to Cloudflare accounts/domains with optional failover proxy routing.
 - 🧭 **Streamlined** Cloudflare account entries, domain lists, and connection status management.
+- 🛡️ **Dedicated proxy support** to protect VPS IPs while routing tunnel traffic.
+- 📦 **Built-in deployment tools** to upload, edit, and replace tunnel bundles from the UI.
 - ⚡ **Ultra-lightweight** in-memory storage for tunnels and accounts for rapid development iteration.
 
 ## Notes
