@@ -15,6 +15,11 @@ const {
   findUserByUsername
 } = require("./src/users/store");
 const {
+  listProjects,
+  saveProjects,
+  findProjectById
+} = require("./src/projects/store");
+const {
   listAccounts,
   saveAccounts,
   sanitizeAccount,
@@ -34,8 +39,10 @@ app.use(express.json());
 
 const uploadRoot = path.join(__dirname, "uploads");
 const deploymentRoot = path.join(__dirname, "deployments");
+const projectRoot = path.join(__dirname, "projects");
 fs.mkdirSync(uploadRoot, { recursive: true });
 fs.mkdirSync(deploymentRoot, { recursive: true });
+fs.mkdirSync(projectRoot, { recursive: true });
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -424,6 +431,44 @@ const resolveDeploymentFilePath = (rootDir, filePath) => {
   return { resolved, relative: relative.split(path.sep).join("/") };
 };
 
+const resolveProjectDir = (projectId) => {
+  if (!projectId || typeof projectId !== "string") {
+    return null;
+  }
+  const resolved = path.resolve(path.join(projectRoot, projectId));
+  const rootScope = path.resolve(projectRoot);
+  if (!resolved.startsWith(rootScope)) {
+    return null;
+  }
+  return resolved;
+};
+
+const stageUploadFiles = async (uploaded, destinationDir) => {
+  if (
+    uploaded.length === 1 &&
+    path.extname(uploaded[0].originalname).toLowerCase() === ".zip"
+  ) {
+    await assertSafeZip(uploaded[0].path);
+    await runCommand("unzip", ["-o", uploaded[0].path, "-d", destinationDir]);
+    fs.unlinkSync(uploaded[0].path);
+    return;
+  }
+
+  uploaded.forEach((file) => {
+    const target = path.join(destinationDir, sanitizeUploadName(file.originalname));
+    fs.renameSync(file.path, target);
+  });
+};
+
+const copyProjectFiles = (projectId, destinationDir) => {
+  const projectDir = resolveProjectDir(projectId);
+  if (!projectDir || !fs.existsSync(projectDir)) {
+    return false;
+  }
+  fs.cpSync(projectDir, destinationDir, { recursive: true });
+  return true;
+};
+
 const listDeploymentFiles = (rootDir) => {
   const results = [];
   const stack = [rootDir];
@@ -441,6 +486,53 @@ const listDeploymentFiles = (rootDir) => {
   }
   return results.sort();
 };
+
+app.get("/api/projects", (req, res) => {
+  res.json({ projects: listProjects() });
+});
+
+app.post("/api/projects", upload.array("files"), async (req, res) => {
+  const uploaded = req.files || [];
+  if (!uploaded.length) {
+    return res.status(400).json({ error: "Upload a zip or project files to save." });
+  }
+  const projectName =
+    typeof req.body.projectName === "string" ? req.body.projectName.trim() : "";
+  if (!projectName) {
+    return res.status(400).json({ error: "Project name is required." });
+  }
+  const startupScript =
+    typeof req.body.startupScript === "string" ? req.body.startupScript.trim() : "";
+
+  const projectId = `prj_${crypto.randomBytes(6).toString("hex")}`;
+  const projectDir = path.join(projectRoot, projectId);
+  fs.mkdirSync(projectDir, { recursive: true });
+
+  try {
+    await stageUploadFiles(uploaded, projectDir);
+    const projects = listProjects();
+    const project = {
+      id: projectId,
+      name: projectName,
+      startupScript: startupScript || null,
+      createdAt: new Date().toISOString()
+    };
+    projects.unshift(project);
+    saveProjects(projects);
+    return res.status(201).json({ project });
+  } catch (error) {
+    logError(error, "POST /api/projects");
+    try {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    } catch (cleanupError) {
+      logError(cleanupError, `remove project ${projectId}`);
+    }
+    return res.status(500).json({
+      error: "Failed to save the project.",
+      details: error.message
+    });
+  }
+});
 
 app.get("/api/users", requireAdmin, (req, res) => {
   const users = listUsers().map(sanitizeUser);
@@ -665,10 +757,17 @@ app.post("/api/cloudflare/accounts/:id/domains", async (req, res) => {
 
 app.post("/api/deployments", upload.array("files"), async (req, res) => {
   const uploaded = req.files || [];
-  if (!uploaded.length) {
-    return res.status(400).json({ error: "Upload a zip or project files to deploy." });
+  const projectId =
+    typeof req.body.projectId === "string" ? req.body.projectId.trim() : "";
+  if (!uploaded.length && !projectId) {
+    return res
+      .status(400)
+      .json({ error: "Upload a zip, project files, or select a saved project." });
   }
-
+  const selectedProject = projectId ? findProjectById(projectId) : null;
+  if (projectId && !selectedProject) {
+    return res.status(404).json({ error: "Saved project not found." });
+  }
   const startupScript =
     typeof req.body.startupScript === "string" ? req.body.startupScript.trim() : "";
   const deploymentId = `app_${crypto.randomBytes(6).toString("hex")}`;
@@ -676,29 +775,27 @@ app.post("/api/deployments", upload.array("files"), async (req, res) => {
   fs.mkdirSync(deploymentDir, { recursive: true });
 
   try {
-    if (
-      uploaded.length === 1 &&
-      path.extname(uploaded[0].originalname).toLowerCase() === ".zip"
-    ) {
-      await assertSafeZip(uploaded[0].path);
-      await runCommand("unzip", ["-o", uploaded[0].path, "-d", deploymentDir]);
-      fs.unlinkSync(uploaded[0].path);
+    if (selectedProject) {
+      const copied = copyProjectFiles(selectedProject.id, deploymentDir);
+      if (!copied) {
+        fs.rmSync(deploymentDir, { recursive: true, force: true });
+        return res.status(404).json({ error: "Saved project files are missing." });
+      }
     } else {
-      uploaded.forEach((file) => {
-        const target = path.join(deploymentDir, sanitizeUploadName(file.originalname));
-        fs.renameSync(file.path, target);
-      });
+      await stageUploadFiles(uploaded, deploymentDir);
     }
 
+    const resolvedStartupScript =
+      startupScript || selectedProject?.startupScript || null;
     const deployment = await startDeployment({
       rootDir: deploymentDir,
-      startupScript: startupScript || null
+      startupScript: resolvedStartupScript
     });
     deployments.set(deploymentId, {
       ...deployment,
       id: deploymentId,
       baseDir: deploymentDir,
-      startupScript: startupScript || null
+      startupScript: resolvedStartupScript
     });
 
     return res.status(201).json({

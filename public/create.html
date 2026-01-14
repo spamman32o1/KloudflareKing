@@ -80,6 +80,13 @@
               </p>
             </div>
             <div class="field-group" data-target="deploy">
+              <label for="project-select">Saved project</label>
+              <select id="project-select" name="project-select">
+                <option value="">Upload new files</option>
+              </select>
+              <p class="helper">
+                Pick a saved project to reuse its files and startup script.
+              </p>
               <label for="deploy-files">Project files or zip</label>
               <input
                 id="deploy-files"
@@ -95,6 +102,19 @@
                 type="text"
                 placeholder="npm start or node server.js"
               />
+              <label for="project-name">Save project as</label>
+              <div class="inline-actions">
+                <input
+                  id="project-name"
+                  name="project-name"
+                  type="text"
+                  placeholder="Reusable launch bundle"
+                />
+                <button id="save-project-btn" type="button" class="secondary-btn">
+                  Save project
+                </button>
+              </div>
+              <p class="helper" id="project-status"></p>
               <p class="helper">
                 If a package-lock.json file is detected we will run a Node
                 startup command. Otherwise we will serve the folder with PHP.
