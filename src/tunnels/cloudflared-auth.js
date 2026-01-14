@@ -5,7 +5,7 @@ const { spawn } = require("child_process");
 const loginSessions = new Map();
 const loginUrlPattern = /https?:\/\/[^\s"')]+/gi;
 const tokenizedLoginPattern =
-  /https?:\/\/[^\s"')]*dash\.cloudflare\.com\/argotunnel\?token=[^\s"')]+/i;
+  /https?:\/\/[^\s"')]*dash\.cloudflare\.com\/argotunnel\?[^\s"')]+/i;
 
 const ensureCertDir = (certPath) => {
   const dir = path.dirname(certPath);
