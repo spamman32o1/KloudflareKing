@@ -242,10 +242,6 @@ if (saveProjectBtn) {
   saveProjectBtn.addEventListener("click", async () => {
     setProjectStatus("");
     const projectName = projectNameInput.value.trim();
-    if (!projectName) {
-      setProjectStatus("Enter a name to save this project bundle.", "error");
-      return;
-    }
     const files = Array.from(deployFilesInput.files || []);
     if (!files.length) {
       setProjectStatus("Choose project files or a zip before saving.", "error");
@@ -257,7 +253,9 @@ if (saveProjectBtn) {
     if (startupScript) {
       formData.append("startupScript", startupScript);
     }
-    formData.append("projectName", projectName);
+    if (projectName) {
+      formData.append("projectName", projectName);
+    }
 
     const response = await fetch("/api/projects", {
       method: "POST",

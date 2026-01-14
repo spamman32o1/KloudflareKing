@@ -102,7 +102,7 @@
                 type="text"
                 placeholder="npm start or node server.js"
               />
-              <label for="project-name">Save project as</label>
+              <label for="project-name">Save project as (optional)</label>
               <div class="inline-actions">
                 <input
                   id="project-name"
@@ -116,8 +116,9 @@
               </div>
               <p class="helper" id="project-status"></p>
               <p class="helper">
-                If a package-lock.json file is detected we will run a Node
-                startup command. Otherwise we will serve the folder with PHP.
+                Leave the name blank to auto-generate a project label. If a
+                package-lock.json file is detected we will run a Node startup
+                command. Otherwise we will serve the folder with PHP.
               </p>
             </div>
             <div class="field-group" data-mode="free">
