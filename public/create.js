@@ -169,10 +169,6 @@ form.addEventListener("submit", async (event) => {
   let targetUrl = targetInput.value.trim();
   let deploymentId = null;
 
-  if (!tunnelName) {
-    return;
-  }
-
   if (targetMode === "deploy") {
     const files = Array.from(deployFilesInput.files || []);
     if (!files.length) {
@@ -241,7 +237,12 @@ form.addEventListener("submit", async (event) => {
   }
 
   if (response.ok) {
-    window.location.href = `/tunnel.html?name=${encodeURIComponent(tunnelName)}`;
+    const data = await response.json();
+    const campaignName =
+      data?.tunnels?.[0]?.tunnelName?.trim() ||
+      tunnelName ||
+      "Untitled campaign";
+    window.location.href = `/tunnel.html?name=${encodeURIComponent(campaignName)}`;
   }
 });
 
