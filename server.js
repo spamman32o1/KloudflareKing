@@ -40,7 +40,9 @@ const upload = multer({
   storage: multer.diskStorage({
     destination: uploadRoot,
     filename: (req, file, cb) => {
-      const safeName = file.originalname.replace(/[^\w.-]/g, "_");
+      const safeName = path
+        .basename(file.originalname)
+        .replace(/[^\w.-]/g, "_");
       cb(null, `${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${safeName}`);
     }
   }),
@@ -242,6 +244,37 @@ const runCommand = (command, args, options = {}) =>
       return resolve({ stdout, stderr });
     });
   });
+
+const sanitizeUploadName = (name) =>
+  path.basename(name).replace(/[^\w.-]/g, "_");
+
+const isUnsafeZipEntry = (entryName) => {
+  const normalized = path.posix.normalize(
+    entryName.replace(/\\/g, "/")
+  );
+  if (path.posix.isAbsolute(normalized)) {
+    return true;
+  }
+  if (normalized.startsWith("..")) {
+    return true;
+  }
+  return normalized.split("/").includes("..");
+};
+
+const assertSafeZip = async (zipPath) => {
+  const { stdout } = await runCommand("unzip", ["-Z", "-1", zipPath]);
+  const entries = stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!entries.length) {
+    throw new Error("The zip archive contains no files.");
+  }
+  const unsafeEntry = entries.find((entry) => isUnsafeZipEntry(entry));
+  if (unsafeEntry) {
+    throw new Error("Zip archive contains unsafe paths.");
+  }
+};
 
 const getAvailablePort = () =>
   new Promise((resolve, reject) => {
@@ -583,11 +616,12 @@ app.post("/api/deployments", upload.array("files"), async (req, res) => {
       uploaded.length === 1 &&
       path.extname(uploaded[0].originalname).toLowerCase() === ".zip"
     ) {
+      await assertSafeZip(uploaded[0].path);
       await runCommand("unzip", ["-o", uploaded[0].path, "-d", deploymentDir]);
       fs.unlinkSync(uploaded[0].path);
     } else {
       uploaded.forEach((file) => {
-        const target = path.join(deploymentDir, file.originalname);
+        const target = path.join(deploymentDir, sanitizeUploadName(file.originalname));
         fs.renameSync(file.path, target);
       });
     }
