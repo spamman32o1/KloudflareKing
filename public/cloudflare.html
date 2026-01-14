@@ -65,14 +65,54 @@
                 placeholder="a1b2c3d4"
                 required
               />
-              <label for="account-token">Cloudflare API token</label>
-              <input
-                id="account-token"
-                name="account-token"
-                type="password"
-                placeholder="Token with Tunnel + DNS edit permissions"
-                required
-              />
+              <div class="auth-options">
+                <span class="label">Authentication</span>
+                <label class="radio">
+                  <input
+                    type="radio"
+                    name="auth-type"
+                    value="token"
+                    checked
+                  />
+                  Use API token
+                </label>
+                <label class="radio">
+                  <input
+                    type="radio"
+                    name="auth-type"
+                    value="cloudflared"
+                  />
+                  Login via browser
+                </label>
+              </div>
+              <div class="token-fields" data-auth="token">
+                <label for="account-token">Cloudflare API token</label>
+                <input
+                  id="account-token"
+                  name="account-token"
+                  type="password"
+                  placeholder="Token with Tunnel + DNS edit permissions"
+                  required
+                />
+              </div>
+              <div class="browser-login" data-auth="cloudflared">
+                <p class="helper">
+                  Use the browser login to connect cloudflared and generate a
+                  certificate for this account.
+                </p>
+                <button id="start-browser-login" type="button">
+                  Start browser login
+                </button>
+                <div class="login-status">
+                  <span class="muted">Login status:</span>
+                  <span id="login-status-text">Idle</span>
+                </div>
+                <div class="login-link">
+                  <span class="muted">Login URL:</span>
+                  <a id="login-url" href="#" target="_blank" rel="noreferrer"></a>
+                </div>
+              </div>
+              <p id="account-form-status" class="helper"></p>
               <button type="submit">Add account</button>
             </form>
             <div class="account-panel">
@@ -85,6 +125,7 @@
                 </div>
                 <button id="refresh-accounts" type="button">Refresh</button>
               </div>
+              <p id="account-list-status" class="helper"></p>
               <div id="account-list" class="account-list"></div>
             </div>
             <div>

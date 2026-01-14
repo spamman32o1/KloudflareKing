@@ -44,8 +44,9 @@ const saveAccounts = (accounts) => {
 };
 
 const sanitizeAccount = (account) => {
-  const { apiToken, ...safe } = account;
-  return safe;
+  const authType = account.authType === "cloudflared" ? "cloudflared" : "token";
+  const { apiToken, certPath, ...safe } = account;
+  return { ...safe, authType };
 };
 
 const cloudflareRequest = async (token, endpoint, options = {}) => {

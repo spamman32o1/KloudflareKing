@@ -19,6 +19,9 @@ const namedSection = document.querySelector('[data-mode="named"]');
 const freeSection = document.querySelector('[data-mode="free"]');
 const accountSelect = document.querySelector("#account-select");
 const domainSelect = document.querySelector("#domain-select");
+const domainInput = document.querySelector("#domain-input");
+const domainSelectField = document.querySelector('[data-domain="select"]');
+const domainManualField = document.querySelector('[data-domain="manual"]');
 const subdomainInput = document.querySelector("#subdomain");
 const namedProxyTypeInput = document.querySelector("#named-proxy-type");
 const namedProxyInput = document.querySelector("#named-proxy");
@@ -28,6 +31,7 @@ const submitBtn = document.querySelector("#submit-btn");
 const helperText = document.querySelector("#form-helper");
 
 let cachedProjects = [];
+let cachedAccounts = [];
 
 const handleUnauthorized = (response) => {
   if (response.status === 401) {
@@ -67,11 +71,15 @@ const setFieldVisibility = (mode) => {
   freeSection.style.display = isNamed ? "none" : "flex";
   accountSelect.required = isNamed;
   domainSelect.required = isNamed;
+  if (domainInput) {
+    domainInput.required = false;
+  }
   tunnelCountInput.required = !isNamed;
   submitBtn.textContent = isNamed ? "Create named tunnel" : "Create free tunnels";
   helperText.textContent = isNamed
-    ? "Named tunnels use your Cloudflare API token to create the tunnel and DNS record."
+    ? "Named tunnels use your connected Cloudflare account to create the tunnel and DNS record."
     : "We will return free Cloudflare hostnames and spread tunnels evenly across your proxies.";
+  syncDomainInputs();
 };
 
 const syncDeployInputs = () => {
@@ -130,6 +138,25 @@ const populateAccountSelect = (accounts) => {
   accountSelect.value = currentValue;
 };
 
+const getSelectedAccount = () =>
+  cachedAccounts.find((account) => account.id === accountSelect.value);
+
+const syncDomainInputs = () => {
+  const isNamed = tunnelTypeSelect.value === "named";
+  const selectedAccount = getSelectedAccount();
+  const usesCloudflared = selectedAccount?.authType === "cloudflared";
+  if (domainSelectField) {
+    domainSelectField.style.display = usesCloudflared ? "none" : "block";
+  }
+  if (domainManualField) {
+    domainManualField.style.display = usesCloudflared ? "block" : "none";
+  }
+  domainSelect.required = isNamed && !usesCloudflared;
+  if (domainInput) {
+    domainInput.required = isNamed && usesCloudflared;
+  }
+};
+
 const populateDomainSelect = (domains) => {
   const currentValue = domainSelect.value;
   domainSelect.innerHTML = '<option value="">Select a domain</option>';
@@ -184,10 +211,12 @@ const refreshProjectData = async () => {
 };
 
 const refreshAccountData = async () => {
-  const accounts = await fetchAccounts();
-  populateAccountSelect(accounts);
+  cachedAccounts = await fetchAccounts();
+  populateAccountSelect(cachedAccounts);
+  syncDomainInputs();
 
-  if (accountSelect.value) {
+  const selectedAccount = getSelectedAccount();
+  if (accountSelect.value && selectedAccount?.authType !== "cloudflared") {
     const domains = await fetchDomains(accountSelect.value);
     populateDomainSelect(domains);
   } else {
@@ -282,6 +311,12 @@ if (saveProjectBtn) {
 }
 
 accountSelect.addEventListener("change", async () => {
+  syncDomainInputs();
+  const selectedAccount = getSelectedAccount();
+  if (selectedAccount?.authType === "cloudflared") {
+    populateDomainSelect([]);
+    return;
+  }
   const domains = await fetchDomains(accountSelect.value);
   populateDomainSelect(domains);
 });
@@ -340,6 +375,11 @@ form.addEventListener("submit", async (event) => {
     tunnelType === "named" ? namedProxyTypeInput.value : proxyTypeInput.value;
   const primaryProxy = namedProxyInput.value.trim();
   const fallbackProxies = parseProxyList(namedProxyListInput.value);
+  const selectedAccount = getSelectedAccount();
+  const domainName =
+    selectedAccount?.authType === "cloudflared"
+      ? domainInput.value.trim()
+      : domainSelect.value;
 
   const response = await fetch("/api/tunnels", {
     method: "POST",
@@ -355,7 +395,7 @@ form.addEventListener("submit", async (event) => {
       proxyType,
       tunnelType,
       accountId: accountSelect.value,
-      domainName: domainSelect.value,
+      domainName,
       subdomain: subdomainInput.value.trim(),
       primaryProxy,
       fallbackProxies
