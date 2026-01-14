@@ -25,6 +25,7 @@ const {
   createDnsRecord,
   findZoneForHostname
 } = require("./src/cloudflare/api");
+const { listTunnels, saveTunnels } = require("./src/tunnels/store");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -496,8 +497,6 @@ app.put("/api/users/:id", requireAdmin, (req, res) => {
   return res.json({ user: sanitizeUser(updated) });
 });
 
-const tunnels = [];
-
 const normalizeDomain = (value) =>
   value
     .trim()
@@ -834,7 +833,7 @@ app.post("/api/deployments/:id/replace", upload.array("files"), async (req, res)
 });
 
 app.get("/api/tunnels", (req, res) => {
-  res.json({ tunnels });
+  res.json({ tunnels: listTunnels() });
 });
 
 app.post("/api/tunnels", async (req, res) => {
@@ -888,6 +887,7 @@ app.post("/api/tunnels", async (req, res) => {
       ? proxyType.trim()
       : null;
   const created = [];
+  const storedTunnels = listTunnels();
   let account = null;
   let normalizedDomain = null;
   let fullDomain = null;
@@ -1019,7 +1019,7 @@ app.post("/api/tunnels", async (req, res) => {
         processId,
         deploymentId: deploymentId || null
       });
-      tunnels.unshift(tunnel);
+      storedTunnels.unshift(tunnel);
       created.push(tunnel);
     }
   } catch (error) {
@@ -1030,15 +1030,18 @@ app.post("/api/tunnels", async (req, res) => {
     });
   }
 
+  saveTunnels(storedTunnels);
   res.status(201).json({ tunnels: created });
 });
 
 app.delete("/api/tunnels/:id", (req, res) => {
+  const tunnels = listTunnels();
   const index = tunnels.findIndex((tunnel) => tunnel.id === req.params.id);
   if (index === -1) {
     return res.status(404).json({ error: "Tunnel not found." });
   }
   const [removed] = tunnels.splice(index, 1);
+  saveTunnels(tunnels);
   if (removed.tunnelType === "free") {
     stopTunnel(removed.id);
   }
@@ -1050,6 +1053,7 @@ app.delete("/api/tunnels/:id", (req, res) => {
 
 app.delete("/api/campaigns/:name", (req, res) => {
   const decodedName = decodeURIComponent(req.params.name || "");
+  const tunnels = listTunnels();
   const matching = tunnels.filter(
     (tunnel) =>
       (tunnel.tunnelName?.trim() || "Untitled campaign") === decodedName
@@ -1070,8 +1074,7 @@ app.delete("/api/campaigns/:name", (req, res) => {
     (tunnel) =>
       (tunnel.tunnelName?.trim() || "Untitled campaign") !== decodedName
   );
-  tunnels.length = 0;
-  tunnels.push(...remaining);
+  saveTunnels(remaining);
   return res.json({ deleted: matching.length });
 });
 

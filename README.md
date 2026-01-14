@@ -32,9 +32,9 @@ A lightweight Node.js + HTML/CSS interface for managing free and named Cloudflar
 - 🧭 **Streamlined** Cloudflare account entries, domain lists, and connection status management.
 - 🛡️ **Proxy protection** with optional rotation/routing to help shield VPS IPs.
 - 📊 **Clear** at-a-glance status visibility for tunnels and accounts.
-- ⚡ **Ultra-lightweight** in-memory storage for tunnels and accounts for rapid development iteration.
+- ⚡ **Ultra-lightweight** storage for tunnels and accounts with local JSON files for easy backup.
 
 ## Notes
 
-- Tunnels and accounts are stored in memory and reset when the server restarts.
+- Tunnels, accounts, and users are stored in local JSON files under `data/` and persist across restarts.
 - Update `config.json` with the desired username/password before deploying.
