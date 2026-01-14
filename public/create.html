@@ -154,10 +154,24 @@
               <select id="account-select" name="account-select" required>
                 <option value="">Select a connected account</option>
               </select>
-              <label for="domain-select">Domain</label>
-              <select id="domain-select" name="domain-select" required>
-                <option value="">Select a domain</option>
-              </select>
+              <div class="domain-field" data-domain="select">
+                <label for="domain-select">Domain</label>
+                <select id="domain-select" name="domain-select" required>
+                  <option value="">Select a domain</option>
+                </select>
+              </div>
+              <div class="domain-field" data-domain="manual">
+                <label for="domain-input">Domain</label>
+                <input
+                  id="domain-input"
+                  name="domain-input"
+                  type="text"
+                  placeholder="example.com"
+                />
+                <p class="helper">
+                  Enter a domain when using browser login accounts.
+                </p>
+              </div>
               <label for="subdomain">Subdomain (optional)</label>
               <input
                 id="subdomain"

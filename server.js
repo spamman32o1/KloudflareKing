@@ -6,6 +6,10 @@ const crypto = require("crypto");
 const { execFile, spawn } = require("child_process");
 const multer = require("multer");
 const { startQuickTunnel, stopTunnel } = require("./src/tunnels/cloudflared");
+const {
+  startCloudflaredLogin,
+  getLoginStatus
+} = require("./src/tunnels/cloudflared-auth");
 const { logError } = require("./src/utils/logger");
 const {
   ensureUserStore,
@@ -97,6 +101,36 @@ const generateProjectName = () => {
     .replace("Z", "")
     .replace(/:/g, "-");
   return `Project ${timestamp}-${crypto.randomBytes(2).toString("hex")}`;
+};
+
+const cloudflaredCertRoot = path.join(__dirname, "data", "cloudflared");
+
+const buildCloudflaredCertPath = (accountId) =>
+  path.join(cloudflaredCertRoot, `${accountId}.pem`);
+
+const runCloudflaredCommand = (args, envOverrides = {}) =>
+  new Promise((resolve, reject) => {
+    execFile(
+      "cloudflared",
+      args,
+      { env: { ...process.env, ...envOverrides } },
+      (error, stdout, stderr) => {
+        if (error) {
+          error.stdout = stdout;
+          error.stderr = stderr;
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      }
+    );
+  });
+
+const parseTunnelId = (text) => {
+  const match = text.match(
+    /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+  );
+  return match ? match[1] : null;
 };
 
 const createTunnel = (
@@ -633,7 +667,9 @@ app.get("/api/cloudflare/accounts", (req, res) => {
 });
 
 app.post("/api/cloudflare/accounts", async (req, res) => {
-  const { label, email, accountId, apiToken } = req.body;
+  const { label, email, accountId, apiToken, authType } = req.body;
+  const normalizedAuthType =
+    authType === "cloudflared" ? "cloudflared" : "token";
 
   if (!label || typeof label !== "string" || !label.trim()) {
     return res.status(400).json({ error: "Account label is required." });
@@ -644,14 +680,18 @@ app.post("/api/cloudflare/accounts", async (req, res) => {
   if (!accountId || typeof accountId !== "string" || !accountId.trim()) {
     return res.status(400).json({ error: "Cloudflare account ID is required." });
   }
-  if (!apiToken || typeof apiToken !== "string" || !apiToken.trim()) {
+  if (
+    normalizedAuthType === "token" &&
+    (!apiToken || typeof apiToken !== "string" || !apiToken.trim())
+  ) {
     return res.status(400).json({ error: "Cloudflare API token is required." });
   }
 
   const trimmedLabel = label.trim();
   const trimmedEmail = email.trim();
   const trimmedAccountId = accountId.trim();
-  const trimmedToken = apiToken.trim();
+  const trimmedToken =
+    typeof apiToken === "string" && apiToken.trim() ? apiToken.trim() : null;
   const accounts = listAccounts();
   const existing = accounts.find(
     (account) => account.accountId === trimmedAccountId
@@ -661,18 +701,20 @@ app.post("/api/cloudflare/accounts", async (req, res) => {
   }
 
   let zones = [];
-  try {
-    await verifyToken(trimmedToken);
-  } catch (error) {
-    logError(error, "POST /api/cloudflare/accounts");
-    return res.status(error.status || 400).json({ error: error.message });
-  }
+  if (normalizedAuthType === "token") {
+    try {
+      await verifyToken(trimmedToken);
+    } catch (error) {
+      logError(error, "POST /api/cloudflare/accounts");
+      return res.status(error.status || 400).json({ error: error.message });
+    }
 
-  try {
-    zones = await listZones(trimmedAccountId, trimmedToken);
-  } catch (error) {
-    logError(error, "POST /api/cloudflare/accounts");
-    return res.status(error.status || 403).json({ error: error.message });
+    try {
+      zones = await listZones(trimmedAccountId, trimmedToken);
+    } catch (error) {
+      logError(error, "POST /api/cloudflare/accounts");
+      return res.status(error.status || 403).json({ error: error.message });
+    }
   }
 
   const id = `acct_${Math.random().toString(36).slice(2, 10)}`;
@@ -682,10 +724,13 @@ app.post("/api/cloudflare/accounts", async (req, res) => {
     email: trimmedEmail,
     accountId: trimmedAccountId,
     apiToken: trimmedToken,
-    status: "connected",
+    authType: normalizedAuthType,
+    certPath:
+      normalizedAuthType === "cloudflared" ? buildCloudflaredCertPath(id) : null,
+    status: normalizedAuthType === "token" ? "connected" : "pending",
     zoneCount: zones.length,
     createdAt: new Date().toISOString(),
-    connectedAt: new Date().toISOString()
+    connectedAt: normalizedAuthType === "token" ? new Date().toISOString() : null
   };
   accounts.unshift(account);
   saveAccounts(accounts);
@@ -693,10 +738,123 @@ app.post("/api/cloudflare/accounts", async (req, res) => {
   return res.status(201).json({ account: sanitizeAccount(account) });
 });
 
+app.post("/api/cloudflare/login/start", async (req, res) => {
+  const { accountId } = req.body;
+  if (!accountId || typeof accountId !== "string") {
+    return res.status(400).json({ error: "Account id is required." });
+  }
+  const account = getAccountById(accountId);
+  if (!account) {
+    return res.status(404).json({ error: "Cloudflare account not found." });
+  }
+  if (account.authType !== "cloudflared") {
+    return res.status(400).json({ error: "This account does not use browser login." });
+  }
+
+  const certPath = account.certPath || buildCloudflaredCertPath(account.id);
+  const sessionId = `login_${account.id}_${Date.now()}`;
+
+  const updated = updateAccount(account.id, (current) => ({
+    ...current,
+    certPath,
+    status: "pending",
+    lastLoginSessionId: sessionId
+  }));
+
+  try {
+    const login = await startCloudflaredLogin({ sessionId, certPath });
+    return res.json({
+      account: sanitizeAccount(updated),
+      login
+    });
+  } catch (error) {
+    logError(error, "POST /api/cloudflare/login/start");
+    updateAccount(account.id, (current) => ({
+      ...current,
+      status: "error"
+    }));
+    return res.status(500).json({
+      error: "Failed to start the Cloudflare browser login.",
+      details: error.message
+    });
+  }
+});
+
+app.get("/api/cloudflare/login/status", (req, res) => {
+  const accountId = typeof req.query.accountId === "string" ? req.query.accountId : "";
+  if (!accountId) {
+    return res.status(400).json({ error: "Account id is required." });
+  }
+  const account = getAccountById(accountId);
+  if (!account) {
+    return res.status(404).json({ error: "Cloudflare account not found." });
+  }
+  if (account.authType !== "cloudflared") {
+    return res.status(400).json({ error: "This account does not use browser login." });
+  }
+
+  const login = account.lastLoginSessionId
+    ? getLoginStatus(account.lastLoginSessionId)
+    : null;
+
+  let nextAccount = account;
+  if (login?.status === "connected") {
+    nextAccount = updateAccount(account.id, (current) => ({
+      ...current,
+      status: "connected",
+      connectedAt: current.connectedAt || new Date().toISOString()
+    }));
+  } else if (login?.status === "error") {
+    nextAccount = updateAccount(account.id, (current) => ({
+      ...current,
+      status: "error"
+    }));
+  } else if (
+    !login &&
+    account.certPath &&
+    fs.existsSync(account.certPath)
+  ) {
+    nextAccount = updateAccount(account.id, (current) => ({
+      ...current,
+      status: "connected",
+      connectedAt: current.connectedAt || new Date().toISOString()
+    }));
+  }
+
+  return res.json({
+    account: sanitizeAccount(nextAccount),
+    login: login || {
+      sessionId: account.lastLoginSessionId || null,
+      status: nextAccount.status || "pending"
+    }
+  });
+});
+
 app.post("/api/cloudflare/accounts/:id/login", async (req, res) => {
   const account = getAccountById(req.params.id);
   if (!account) {
     return res.status(404).json({ error: "Cloudflare account not found." });
+  }
+
+  if (account.authType === "cloudflared") {
+    const hasCert = account.certPath && fs.existsSync(account.certPath);
+    if (!hasCert) {
+      const updated = updateAccount(account.id, (current) => ({
+        ...current,
+        status: "error"
+      }));
+      return res.status(400).json({
+        error: "Cloudflared certificate missing. Start browser login first.",
+        account: sanitizeAccount(updated)
+      });
+    }
+
+    const updated = updateAccount(account.id, (current) => ({
+      ...current,
+      status: "connected",
+      connectedAt: current.connectedAt || new Date().toISOString()
+    }));
+    return res.json({ account: sanitizeAccount(updated) });
   }
 
   try {
@@ -726,6 +884,11 @@ app.get("/api/cloudflare/accounts/:id/domains", async (req, res) => {
   if (!account) {
     return res.status(404).json({ error: "Cloudflare account not found." });
   }
+  if (account.authType === "cloudflared" && !account.apiToken) {
+    return res.status(400).json({
+      error: "Domains require an API token. Add a token-auth account for zones."
+    });
+  }
   try {
     const zones = await listZones(account.accountId, account.apiToken);
     const domains = zones.map((zone) => zone.name).sort();
@@ -740,6 +903,11 @@ app.post("/api/cloudflare/accounts/:id/domains", async (req, res) => {
   const account = getAccountById(req.params.id);
   if (!account) {
     return res.status(404).json({ error: "Cloudflare account not found." });
+  }
+  if (account.authType === "cloudflared" && !account.apiToken) {
+    return res.status(400).json({
+      error: "Domains require an API token. Add a token-auth account for zones."
+    });
   }
   const { hostname } = req.body;
   if (!hostname || typeof hostname !== "string") {
@@ -1007,6 +1175,7 @@ app.post("/api/tunnels", async (req, res) => {
 
   let zoneId = null;
   let cloudflareTunnel = null;
+  let usesCloudflaredAuth = false;
 
   if (selectedType === "named") {
     if (!accountId || typeof accountId !== "string") {
@@ -1042,19 +1211,22 @@ app.post("/api/tunnels", async (req, res) => {
     } else {
       fullDomain = normalizedDomain;
     }
+    usesCloudflaredAuth = account.authType === "cloudflared";
 
-    try {
-      const zones = await listZones(account.accountId, account.apiToken);
-      const zone = findZoneForHostname(fullDomain || normalizedDomain, zones);
-      if (!zone) {
-        return res.status(400).json({
-          error: "Select a domain that exists on the connected account."
-        });
+    if (!usesCloudflaredAuth) {
+      try {
+        const zones = await listZones(account.accountId, account.apiToken);
+        const zone = findZoneForHostname(fullDomain || normalizedDomain, zones);
+        if (!zone) {
+          return res.status(400).json({
+            error: "Select a domain that exists on the connected account."
+          });
+        }
+        zoneId = zone.id;
+      } catch (error) {
+        logError(error, "POST /api/tunnels (list zones)");
+        return res.status(400).json({ error: error.message });
       }
-      zoneId = zone.id;
-    } catch (error) {
-      logError(error, "POST /api/tunnels (list zones)");
-      return res.status(400).json({ error: error.message });
     }
   }
 
@@ -1098,23 +1270,48 @@ app.post("/api/tunnels", async (req, res) => {
       }
       if (selectedType === "named") {
         const tunnelNameLabel = `${trimmedName}-${Date.now()}`;
-        cloudflareTunnel =
-          cloudflareTunnel ||
-          (await createCloudflareTunnel(
-            account.accountId,
-            account.apiToken,
-            tunnelNameLabel
-          ));
-        tunnelId = cloudflareTunnel.id;
-        const record = {
-          type: "CNAME",
-          name: fullDomain,
-          content: `${tunnelId}.cfargotunnel.com`,
-          ttl: 1,
-          proxied: true
-        };
-        await createDnsRecord(zoneId, account.apiToken, record);
-        hostname = fullDomain;
+        if (usesCloudflaredAuth) {
+          if (!account.certPath || !fs.existsSync(account.certPath)) {
+            throw new Error(
+              "Cloudflared certificate missing. Connect the account first."
+            );
+          }
+          const createResult = await runCloudflaredCommand(
+            ["tunnel", "create", tunnelNameLabel],
+            { TUNNEL_ORIGIN_CERT: account.certPath }
+          );
+          const createdId = parseTunnelId(
+            `${createResult.stdout}\n${createResult.stderr}`
+          );
+          if (!createdId) {
+            throw new Error("Failed to parse tunnel id from cloudflared output.");
+          }
+          tunnelId = createdId;
+          cloudflareTunnel = { id: createdId };
+          await runCloudflaredCommand(
+            ["tunnel", "route", "dns", createdId, fullDomain],
+            { TUNNEL_ORIGIN_CERT: account.certPath }
+          );
+          hostname = fullDomain;
+        } else {
+          cloudflareTunnel =
+            cloudflareTunnel ||
+            (await createCloudflareTunnel(
+              account.accountId,
+              account.apiToken,
+              tunnelNameLabel
+            ));
+          tunnelId = cloudflareTunnel.id;
+          const record = {
+            type: "CNAME",
+            name: fullDomain,
+            content: `${tunnelId}.cfargotunnel.com`,
+            ttl: 1,
+            proxied: true
+          };
+          await createDnsRecord(zoneId, account.apiToken, record);
+          hostname = fullDomain;
+        }
       }
 
       const tunnel = createTunnel(resolvedTargetUrl, {

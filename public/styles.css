@@ -278,6 +278,49 @@ button:hover {
   background: #ffffff;
 }
 
+.auth-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.auth-options .label {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.browser-login {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: #f7f9ff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.browser-login .login-status,
+.browser-login .login-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.browser-login .login-link a {
+  color: var(--primary);
+  word-break: break-all;
+}
+
 .account-header {
   display: flex;
   align-items: flex-start;
