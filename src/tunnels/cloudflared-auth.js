@@ -91,30 +91,43 @@ const startCloudflaredLogin = ({ sessionId, certPath } = {}) =>
       record.exitedAt = new Date().toISOString();
       record.exitCode = code;
       record.signal = signal;
-      if (code === 0 && fs.existsSync(certPath)) {
+      const hasCert = fs.existsSync(certPath);
+      const hasLoginUrl = Boolean(record.loginUrl);
+
+      if (code === 0 && hasCert) {
         record.status = "connected";
         record.connectedAt = new Date().toISOString();
+      } else if (code === 0 && hasLoginUrl) {
+        record.status = "awaiting_auth";
       } else {
         record.status = "error";
         record.error =
           record.error ||
-          `cloudflared login exited with code ${code ?? "unknown"}.`;
+          (hasLoginUrl
+            ? `cloudflared login exited with code ${code ?? "unknown"}.`
+            : "cloudflared login exited before a login URL was detected.");
       }
       if (!resolved) {
         resolved = true;
-        if (record.loginUrl && tokenizedLoginPattern.test(record.loginUrl)) {
+        if (record.loginUrl) {
           resolve({
             sessionId: record.id,
             loginUrl: record.loginUrl,
             status: record.status
           });
-        } else {
+        } else if (code !== 0) {
           reject(
             new Error(
               record.error ||
                 "cloudflared login exited before a tokenized login URL was detected."
             )
           );
+        } else {
+          resolve({
+            sessionId: record.id,
+            loginUrl: record.loginUrl,
+            status: record.status
+          });
         }
       }
     });
