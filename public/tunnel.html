@@ -56,6 +56,81 @@
           </div>
           <div id="tunnel-list" class="tunnel-list"></div>
         </section>
+
+        <section class="form-panel full-panel is-hidden" id="deployment-panel">
+          <div class="list-header">
+            <div>
+              <h2>Deployment files</h2>
+              <p class="muted" id="deployment-subtitle">
+                Edit deployed files or replace the deployment bundle.
+              </p>
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="deployment-file-select">File to edit</label>
+            <select id="deployment-file-select"></select>
+            <label for="deployment-editor">File contents</label>
+            <textarea id="deployment-editor" rows="10"></textarea>
+            <div class="inline-actions">
+              <button id="deployment-save" type="button">Save changes</button>
+              <div class="confirm-actions" id="deployment-confirm">
+                <button
+                  id="deployment-confirm-save"
+                  class="danger-btn"
+                  type="button"
+                >
+                  Confirm save
+                </button>
+                <button
+                  id="deployment-cancel-save"
+                  class="ghost-btn"
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+            <p class="helper" id="deployment-status"></p>
+          </div>
+          <div class="field-group">
+            <label for="deployment-replace-files">Replace deployment files</label>
+            <input
+              id="deployment-replace-files"
+              type="file"
+              accept=".zip"
+              multiple
+            />
+            <div class="inline-actions">
+              <button
+                id="deployment-replace"
+                class="danger-btn"
+                type="button"
+              >
+                Replace deployment
+              </button>
+              <div class="confirm-actions" id="deployment-confirm-replace">
+                <button
+                  id="deployment-confirm-replace-btn"
+                  class="danger-btn"
+                  type="button"
+                >
+                  Confirm replace
+                </button>
+                <button
+                  id="deployment-cancel-replace"
+                  class="ghost-btn"
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+            <p class="helper">
+              Uploads overwrite the existing deployment without changing the
+              tunnel links.
+            </p>
+          </div>
+        </section>
       </main>
     </div>
 

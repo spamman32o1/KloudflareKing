@@ -313,10 +313,10 @@ const findStartupFile = (rootDir) => {
   return match || null;
 };
 
-const startDeployment = async ({ rootDir, startupScript }) => {
+const startDeployment = async ({ rootDir, startupScript, fixedPort }) => {
   const appRoot = resolveAppRoot(rootDir);
   const hasPackageLock = fs.existsSync(path.join(appRoot, "package-lock.json"));
-  const port = await getAvailablePort();
+  const port = fixedPort || (await getAvailablePort());
   const env = {
     ...process.env,
     PORT: String(port),
@@ -374,15 +374,66 @@ const startDeployment = async ({ rootDir, startupScript }) => {
   };
 };
 
+const stopDeploymentProcess = (deployment) => {
+  if (deployment?.process && !deployment.process.killed) {
+    deployment.process.kill();
+  }
+};
+
 const stopDeployment = (deploymentId) => {
   const deployment = deployments.get(deploymentId);
   if (!deployment) {
     return;
   }
-  if (deployment.process && !deployment.process.killed) {
-    deployment.process.kill();
-  }
+  stopDeploymentProcess(deployment);
   deployments.delete(deploymentId);
+};
+
+const resolveDeploymentDirs = (deploymentId) => {
+  const deployment = deployments.get(deploymentId);
+  if (!deployment) {
+    return null;
+  }
+  const baseDir = path.resolve(
+    deployment.baseDir || path.join(deploymentRoot, deploymentId)
+  );
+  const rootDir = path.resolve(deployment.rootDir || baseDir);
+  const rootScope = path.resolve(deploymentRoot);
+  if (!baseDir.startsWith(rootScope) || !rootDir.startsWith(rootScope)) {
+    return null;
+  }
+  return { deployment, baseDir, rootDir };
+};
+
+const resolveDeploymentFilePath = (rootDir, filePath) => {
+  if (!filePath || typeof filePath !== "string") {
+    return null;
+  }
+  const normalized = filePath.replace(/\\/g, "/");
+  const resolved = path.resolve(rootDir, normalized);
+  const relative = path.relative(rootDir, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return null;
+  }
+  return { resolved, relative: relative.split(path.sep).join("/") };
+};
+
+const listDeploymentFiles = (rootDir) => {
+  const results = [];
+  const stack = [rootDir];
+  while (stack.length) {
+    const current = stack.pop();
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    entries.forEach((entry) => {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+      } else if (entry.isFile()) {
+        results.push(path.relative(rootDir, fullPath).split(path.sep).join("/"));
+      }
+    });
+  }
+  return results.sort();
 };
 
 app.get("/api/users", requireAdmin, (req, res) => {
@@ -641,7 +692,9 @@ app.post("/api/deployments", upload.array("files"), async (req, res) => {
     });
     deployments.set(deploymentId, {
       ...deployment,
-      id: deploymentId
+      id: deploymentId,
+      baseDir: deploymentDir,
+      startupScript: startupScript || null
     });
 
     return res.status(201).json({
@@ -654,6 +707,127 @@ app.post("/api/deployments", upload.array("files"), async (req, res) => {
     logError(error, "POST /api/deployments");
     return res.status(500).json({
       error: "Failed to start the deployment.",
+      details: error.message
+    });
+  }
+});
+
+app.get("/api/deployments/:id/files", (req, res) => {
+  const resolved = resolveDeploymentDirs(req.params.id);
+  if (!resolved) {
+    return res.status(404).json({ error: "Deployment not found." });
+  }
+  try {
+    const files = listDeploymentFiles(resolved.rootDir);
+    return res.json({ files });
+  } catch (error) {
+    logError(error, "GET /api/deployments/:id/files");
+    return res.status(500).json({ error: "Failed to read deployment files." });
+  }
+});
+
+app.get("/api/deployments/:id/file", (req, res) => {
+  const resolved = resolveDeploymentDirs(req.params.id);
+  if (!resolved) {
+    return res.status(404).json({ error: "Deployment not found." });
+  }
+  const filePath = resolveDeploymentFilePath(resolved.rootDir, req.query.path);
+  if (!filePath) {
+    return res.status(400).json({ error: "Provide a valid file path." });
+  }
+  try {
+    const stats = fs.statSync(filePath.resolved);
+    if (!stats.isFile()) {
+      return res.status(400).json({ error: "Path must point to a file." });
+    }
+    if (stats.size > 200 * 1024) {
+      return res.status(413).json({ error: "File is too large to edit." });
+    }
+    const contents = fs.readFileSync(filePath.resolved, "utf-8");
+    return res.json({ path: filePath.relative, contents });
+  } catch (error) {
+    logError(error, "GET /api/deployments/:id/file");
+    return res.status(500).json({ error: "Failed to read the file." });
+  }
+});
+
+app.put("/api/deployments/:id/file", (req, res) => {
+  const resolved = resolveDeploymentDirs(req.params.id);
+  if (!resolved) {
+    return res.status(404).json({ error: "Deployment not found." });
+  }
+  const { path: filePath, contents } = req.body || {};
+  if (typeof contents !== "string") {
+    return res.status(400).json({ error: "File contents must be text." });
+  }
+  const resolvedPath = resolveDeploymentFilePath(resolved.rootDir, filePath);
+  if (!resolvedPath) {
+    return res.status(400).json({ error: "Provide a valid file path." });
+  }
+  try {
+    if (!fs.existsSync(resolvedPath.resolved)) {
+      return res.status(404).json({ error: "File not found." });
+    }
+    fs.writeFileSync(resolvedPath.resolved, contents, "utf-8");
+    return res.json({ ok: true });
+  } catch (error) {
+    logError(error, "PUT /api/deployments/:id/file");
+    return res.status(500).json({ error: "Failed to save the file." });
+  }
+});
+
+app.post("/api/deployments/:id/replace", upload.array("files"), async (req, res) => {
+  const resolved = resolveDeploymentDirs(req.params.id);
+  if (!resolved) {
+    return res.status(404).json({ error: "Deployment not found." });
+  }
+  const uploaded = req.files || [];
+  if (!uploaded.length) {
+    return res.status(400).json({ error: "Upload a zip or project files to replace." });
+  }
+
+  try {
+    stopDeploymentProcess(resolved.deployment);
+    fs.rmSync(resolved.baseDir, { recursive: true, force: true });
+    fs.mkdirSync(resolved.baseDir, { recursive: true });
+
+    if (
+      uploaded.length === 1 &&
+      path.extname(uploaded[0].originalname).toLowerCase() === ".zip"
+    ) {
+      await assertSafeZip(uploaded[0].path);
+      await runCommand("unzip", ["-o", uploaded[0].path, "-d", resolved.baseDir]);
+      fs.unlinkSync(uploaded[0].path);
+    } else {
+      uploaded.forEach((file) => {
+        const target = path.join(resolved.baseDir, sanitizeUploadName(file.originalname));
+        fs.renameSync(file.path, target);
+      });
+    }
+
+    const deployment = await startDeployment({
+      rootDir: resolved.baseDir,
+      startupScript: resolved.deployment.startupScript || null,
+      fixedPort: resolved.deployment.port
+    });
+
+    deployments.set(req.params.id, {
+      ...deployment,
+      id: req.params.id,
+      baseDir: resolved.baseDir,
+      startupScript: resolved.deployment.startupScript || null
+    });
+
+    return res.json({
+      deploymentId: req.params.id,
+      targetUrl: deployment.targetUrl,
+      port: deployment.port,
+      type: deployment.type
+    });
+  } catch (error) {
+    logError(error, "POST /api/deployments/:id/replace");
+    return res.status(500).json({
+      error: "Failed to replace the deployment.",
       details: error.message
     });
   }
