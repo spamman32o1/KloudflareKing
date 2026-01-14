@@ -3,7 +3,9 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const loginSessions = new Map();
-const loginUrlPattern = /https?:\/\/[^\s"')]+/i;
+const loginUrlPattern = /https?:\/\/[^\s"')]+/gi;
+const tokenizedLoginPattern =
+  /https?:\/\/[^\s"')]*dash\.cloudflare\.com\/argotunnel\?token=[^\s"')]+/i;
 
 const ensureCertDir = (certPath) => {
   const dir = path.dirname(certPath);
@@ -55,9 +57,15 @@ const startCloudflaredLogin = ({ sessionId, certPath } = {}) =>
     const handleOutput = (data) => {
       const text = data.toString();
       record.output.push(text);
-      const match = text.match(loginUrlPattern);
-      if (match && !record.loginUrl) {
-        record.loginUrl = match[0];
+      const urls = Array.from(text.matchAll(loginUrlPattern), (match) => match[0]);
+      if (!urls.length) {
+        return;
+      }
+
+      const tokenizedUrl = urls.find((url) => tokenizedLoginPattern.test(url));
+
+      if (tokenizedUrl) {
+        record.loginUrl = tokenizedUrl;
         record.status = "awaiting_auth";
         if (!resolved) {
           resolved = true;
@@ -67,6 +75,12 @@ const startCloudflaredLogin = ({ sessionId, certPath } = {}) =>
             status: record.status
           });
         }
+        return;
+      }
+
+      if (!record.loginUrl) {
+        record.loginUrl = urls[0];
+        record.status = "awaiting_auth";
       }
     };
 
@@ -88,7 +102,7 @@ const startCloudflaredLogin = ({ sessionId, certPath } = {}) =>
       }
       if (!resolved) {
         resolved = true;
-        if (record.loginUrl) {
+        if (record.loginUrl && tokenizedLoginPattern.test(record.loginUrl)) {
           resolve({
             sessionId: record.id,
             loginUrl: record.loginUrl,
@@ -98,7 +112,7 @@ const startCloudflaredLogin = ({ sessionId, certPath } = {}) =>
           reject(
             new Error(
               record.error ||
-                "cloudflared login exited before a login URL was detected."
+                "cloudflared login exited before a tokenized login URL was detected."
             )
           );
         }
