@@ -60,11 +60,26 @@ const cloudflareRequest = async (token, endpoint, options = {}) => {
 
   const payload = await response.json();
   if (!response.ok || !payload.success) {
-    const message =
-      payload?.errors?.[0]?.message ||
-      `Cloudflare API error (${response.status}).`;
+    const errors = payload?.errors || [];
+    const messageFromPayload = errors[0]?.message;
+    const endpointMismatch = errors.some((error) =>
+      /could not route|endpoint not found|not found/i.test(error?.message || "")
+    );
+    let message = messageFromPayload || `Cloudflare API error (${response.status}).`;
+
+    if (response.status === 401) {
+      message = "Invalid Cloudflare API token.";
+    } else if (response.status === 403) {
+      message =
+        "Token valid but missing Account/Zone permissions for this endpoint.";
+    } else if (response.status === 404 || endpointMismatch) {
+      message =
+        "Cloudflare API endpoint mismatch. Verify the account/zone ID and endpoint.";
+    }
+
     const error = new Error(message);
-    error.details = payload.errors || [];
+    error.details = errors;
+    error.status = response.status;
     throw error;
   }
 
