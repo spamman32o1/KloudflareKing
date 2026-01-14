@@ -91,6 +91,15 @@ const generateCampaignName = () => {
   return `Campaign ${timestamp}-${crypto.randomBytes(2).toString("hex")}`;
 };
 
+const generateProjectName = () => {
+  const timestamp = new Date()
+    .toISOString()
+    .replace("T", " ")
+    .replace("Z", "")
+    .replace(/:/g, "-");
+  return `Project ${timestamp}-${crypto.randomBytes(2).toString("hex")}`;
+};
+
 const createTunnel = (
   targetUrl,
   {
@@ -498,9 +507,7 @@ app.post("/api/projects", upload.array("files"), async (req, res) => {
   }
   const projectName =
     typeof req.body.projectName === "string" ? req.body.projectName.trim() : "";
-  if (!projectName) {
-    return res.status(400).json({ error: "Project name is required." });
-  }
+  const resolvedProjectName = projectName || generateProjectName();
   const startupScript =
     typeof req.body.startupScript === "string" ? req.body.startupScript.trim() : "";
 
@@ -513,7 +520,7 @@ app.post("/api/projects", upload.array("files"), async (req, res) => {
     const projects = listProjects();
     const project = {
       id: projectId,
-      name: projectName,
+      name: resolvedProjectName,
       startupScript: startupScript || null,
       createdAt: new Date().toISOString()
     };
