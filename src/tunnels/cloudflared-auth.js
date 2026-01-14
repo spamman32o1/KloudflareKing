@@ -3,10 +3,6 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const loginSessions = new Map();
-const loginUrlPattern = /https?:\/\/[^\s"')]+/gi;
-const tokenizedLoginPattern =
-  /https:\/\/dash\.cloudflare\.com\/argotunnel\?(?=[^\s"')]*\baud=)(?=[^\s"')]*\bcallback=)[^\s"')]+/i;
-
 const ensureCertDir = (certPath) => {
   const dir = path.dirname(certPath);
   if (!fs.existsSync(dir)) {
@@ -56,35 +52,16 @@ const startCloudflaredLogin = ({ sessionId, certPath } = {}) =>
 
     const handleOutput = (data) => {
       const text = data.toString();
-      const normalizedText = text.replace(/[\r\n]+/g, "");
       record.output.push(text);
-      const urls = Array.from(
-        normalizedText.matchAll(loginUrlPattern),
-        (match) => match[0]
-      );
-      if (!urls.length) {
-        return;
-      }
-
-      const tokenizedUrl = urls.find((url) => tokenizedLoginPattern.test(url));
-
-      if (tokenizedUrl) {
-        record.loginUrl = tokenizedUrl;
-        record.status = "awaiting_auth";
-        if (!resolved) {
-          resolved = true;
-          resolve({
-            sessionId: record.id,
-            loginUrl: record.loginUrl,
-            status: record.status
-          });
-        }
-        return;
-      }
-
-      if (!record.loginUrl) {
-        record.loginUrl = urls[0];
-        record.status = "awaiting_auth";
+      record.loginUrl = record.output.join("");
+      record.status = "awaiting_auth";
+      if (!resolved) {
+        resolved = true;
+        resolve({
+          sessionId: record.id,
+          loginUrl: record.loginUrl,
+          status: record.status
+        });
       }
     };
 
