@@ -18,6 +18,7 @@ const domainList = document.querySelector("#domain-list");
 
 let loginPollTimer = null;
 let activeLoginAccountId = null;
+let cachedAccounts = [];
 
 const handleUnauthorized = (response) => {
   if (response.status === 401) {
@@ -77,6 +78,9 @@ const fetchDomains = async (accountId) => {
   const data = await response.json();
   return data.domains || [];
 };
+
+const shouldFetchDomains = (account) =>
+  account?.authType === "token" && account?.status === "connected";
 
 const getSelectedAuthType = () =>
   Array.from(authTypeInputs).find((input) => input.checked)?.value || "token";
@@ -325,12 +329,20 @@ const populateAccountSelect = (accounts) => {
 const refreshAccountData = async () => {
   let accounts = await fetchAccounts();
   accounts = await refreshCloudflaredAccounts(accounts);
+  cachedAccounts = accounts;
   renderAccountList(accounts);
   populateAccountSelect(accounts);
 
   if (accountSelect.value) {
-    const domains = await fetchDomains(accountSelect.value);
-    renderDomainList(domains);
+    const selectedAccount = accounts.find(
+      (account) => account.id === accountSelect.value
+    );
+    if (shouldFetchDomains(selectedAccount)) {
+      const domains = await fetchDomains(accountSelect.value);
+      renderDomainList(domains);
+    } else {
+      renderDomainList([]);
+    }
   } else {
     renderDomainList([]);
   }
@@ -339,8 +351,15 @@ const refreshAccountData = async () => {
 refreshAccountsBtn.addEventListener("click", refreshAccountData);
 
 accountSelect.addEventListener("change", async () => {
-  const domains = await fetchDomains(accountSelect.value);
-  renderDomainList(domains);
+  const selectedAccount = cachedAccounts.find(
+    (account) => account.id === accountSelect.value
+  );
+  if (shouldFetchDomains(selectedAccount)) {
+    const domains = await fetchDomains(accountSelect.value);
+    renderDomainList(domains);
+  } else {
+    renderDomainList([]);
+  }
 });
 
 authTypeInputs.forEach((input) => {
