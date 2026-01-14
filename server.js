@@ -74,6 +74,15 @@ process.on("uncaughtException", (error) => {
 const createTunnelId = () =>
   `tnl_${Math.random().toString(36).slice(2, 10)}`;
 
+const generateCampaignName = () => {
+  const timestamp = new Date()
+    .toISOString()
+    .replace("T", " ")
+    .replace("Z", "")
+    .replace(/:/g, "-");
+  return `Campaign ${timestamp}-${crypto.randomBytes(2).toString("hex")}`;
+};
+
 const createTunnel = (
   targetUrl,
   {
@@ -682,9 +691,8 @@ app.post("/api/tunnels", async (req, res) => {
     });
   }
 
-  if (!tunnelName || typeof tunnelName !== "string" || !tunnelName.trim()) {
-    return res.status(400).json({ error: "A tunnel campaign name is required." });
-  }
+  const requestedName = typeof tunnelName === "string" ? tunnelName.trim() : "";
+  const trimmedName = requestedName || generateCampaignName();
 
   const selectedType = tunnelType === "named" ? "named" : "free";
   const parsedCount = Number.parseInt(tunnelCount ?? 1, 10);
@@ -705,7 +713,6 @@ app.post("/api/tunnels", async (req, res) => {
     typeof proxyType === "string" && proxyType.trim().length
       ? proxyType.trim()
       : null;
-  const trimmedName = tunnelName.trim();
   const created = [];
   let account = null;
   let normalizedDomain = null;

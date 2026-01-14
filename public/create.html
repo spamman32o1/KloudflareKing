@@ -13,9 +13,9 @@
           <p class="eyebrow">Cloudflare Tunnel Manager</p>
           <h1>Create a new tunnel campaign.</h1>
           <p class="subtitle">
-            Add a campaign name so your tunnels stay organized and easy to
-            manage. Choose free or named tunnels based on how you want to
-            publish your hostname.
+            Add an optional campaign name so your tunnels stay organized and
+            easy to manage. Leave it blank to auto-generate one. Choose free or
+            named tunnels based on how you want to publish your hostname.
           </p>
           <div class="header-actions">
             <a class="secondary-btn" href="/index.html">Back to dashboard</a>
@@ -43,13 +43,12 @@
               <option value="free" selected>Free (trycloudflare.com)</option>
               <option value="named">Named (your domain)</option>
             </select>
-            <label for="tunnel-name">Tunnel campaign name</label>
+            <label for="tunnel-name">Tunnel campaign name (optional)</label>
             <input
               id="tunnel-name"
               name="tunnel-name"
               type="text"
               placeholder="Spring product launch"
-              required
             />
             <label>Target source</label>
             <div class="option-row">
