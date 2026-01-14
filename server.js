@@ -19,12 +19,11 @@ const {
   saveProjects,
   findProjectById
 } = require("./src/projects/store");
-const {
+  const {
   listAccounts,
   saveAccounts,
   sanitizeAccount,
   verifyToken,
-  fetchAccountDetails,
   listZones,
   createTunnel: createCloudflareTunnel,
   createDnsRecord,
@@ -664,11 +663,20 @@ app.post("/api/cloudflare/accounts", async (req, res) => {
   let zones = [];
   try {
     await verifyToken(trimmedToken);
-    await fetchAccountDetails(trimmedAccountId, trimmedToken);
-    zones = await listZones(trimmedAccountId, trimmedToken);
   } catch (error) {
     logError(error, "POST /api/cloudflare/accounts");
     return res.status(400).json({ error: error.message });
+  }
+
+  try {
+    zones = await listZones(trimmedAccountId, trimmedToken);
+  } catch (error) {
+    logError(error, "POST /api/cloudflare/accounts");
+    return res.status(403).json({
+      error:
+        "Token verified, but it does not have permission to list DNS zones. " +
+        "Grant Zone:Read access for this account to continue."
+    });
   }
 
   const id = `acct_${Math.random().toString(36).slice(2, 10)}`;
